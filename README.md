@@ -1,6 +1,8 @@
 # rbx-instance-serializer
 A blazing fast & size effective Roblox instance serializer.
 
+**WARN:** I made that project in under 8 hours and it's missing the deserialization function, i will add it soon.
+
 # Benchmarks
 Output is up to *80%* smaller than the most common serialization method on heavy models.
 
