@@ -1,0 +1,19 @@
+{
+  "name": "rbx-instance-serializer",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedFirst": {
+      "packages": {
+        "$path": "packages"
+      }
+    },
+    "ServerScriptService": {
+      "lib": {
+        "$path": "lib"
+      },
+      "tests": {
+        "$path": "tests"
+      }
+    }
+  }
+}
