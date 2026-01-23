@@ -193,10 +193,10 @@ Encoding.UDim2 = {
 
 Encoding.Enum = {
     write = function(b: FastBufferStream.BufferWriter, v: EnumItem)
-        b.writeu32(v.Value)
+        b.writeu8(v.Value)
     end,
     read = function(b: FastBufferStream.BufferReader)
-        return b.readu32()
+        return b.readu8()
     end,
 }
 

@@ -3,6 +3,8 @@ local FastBufferStream = require(script.modules.FastBufferStream)
 
 local function Serialize(b: FastBufferStream.BufferWriter, instance: Instance)
 	local instanceClassData = ClassDatas[instance.ClassName]
+	if not instanceClassData then return end
+
 	b.writeu16(instanceClassData.id)
 
 	local instanceMemberCountPosition = b.GetPos()
