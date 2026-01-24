@@ -2,12 +2,16 @@ return function()
 	local lib = require(game.ServerScriptService.lib)
 
 	local function MeasureSerialization(lib, instance: Instance, compressed: boolean?)
-		print("total instances:", 1 + #instance:GetDescendants())
-	
+		
 		local started = os.clock()
 		local output = lib[if compressed then "SerializeCompressed" else "Serialize"](instance)
 		local finished = os.clock()
 		local elapsed = finished - started
+
+		print("------")
+		print("instance:", instance)
+		print("compression enabled:", compressed)
+		print("total instances:", 1 + #instance:GetDescendants())
 		print("time elapsed:", elapsed)
 		print("lenght:", #output)
 	
