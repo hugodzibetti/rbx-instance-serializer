@@ -1,11 +1,13 @@
 # rbx-instance-serializer
-A blazing fast & size effective Roblox instance serializer.
 
-**WARN:** I made that project in under 8 hours and it's missing the deserialization function, i will add it soon.
+A blazing fast and size-efficient Roblox instance serializer.
 
-# Benchmarks
-Output is up to *80%* smaller than the most common serialization method on heavy models, and **41%** smaller than you would get by saving a heavy model to a .rbxm file in Roblox Studio.
+**Note:** Deserialization support coming soon.
 
-Testing on my laptop it could serialize the entire Brookhaven Map(9797 instances) within ~0.054s.
+## Benchmarks
 
-I still didn't measured the speed againts the "loadstring" serialization/deserialization method but **it's at least 100x faster**, considering most plugins that use this common method of serialization usually take a couple seconds to serialize hundred of instances and just take forever to do a thousand instances.
+- Up to 80% smaller than common serialization methods on heavy models
+- Around 41% smaller than .rbxm files
+- Serializes the entire Brookhaven map (9,797 instances) in ~0.054s
+
+*Tests made on a I7 12000h CPU*
