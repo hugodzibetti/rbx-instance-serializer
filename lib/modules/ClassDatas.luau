@@ -84,7 +84,7 @@ local function ProcessClassData(classId: number, className: string, classMembers
 		local memberValueTypeName = memberValueType.Name
 		local memberValueTypeCategory = memberValueType.Category
 		local memberValueTypeEnconding = ValueTypeEnconding[memberValueTypeName]
-		if not ValueTypeEnconding then
+		if not memberValueTypeEnconding then
 			memberValueTypeEnconding = ValueTypeEnconding[memberValueTypeCategory]
 		end
 

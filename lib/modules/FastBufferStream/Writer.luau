@@ -5,6 +5,7 @@ export type BufferWriter = {
 	buf: buffer,
 	Skip: (v: number) -> (),
 	GetPos: () -> (),
+	writeboolean: (v: boolean) -> (),
 	writeu8: (v: number) -> (),
 	writeu16: (v: number) -> (),
 	writeu32: (v: number) -> (),
@@ -29,6 +30,11 @@ local function new(size: number): BufferWriter
 		
 		GetPos = function()
 			return pos
+		end,
+
+		writeboolean = function(v: boolean)
+			buffer.writeu8(buf, pos, if v then 1 else 0)
+			pos += 1
 		end,
 		
 		writeu8 = function(v: number)

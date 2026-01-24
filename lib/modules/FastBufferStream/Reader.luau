@@ -5,6 +5,7 @@ export type BufferReader = {
 	buf: buffer,
 	Skip: (v: number) -> (),
 	GetPos: () -> (),
+	readboolean: () -> boolean,
 	readu8: () -> number,
 	readu16: () -> number,
 	readu32: () -> number,
@@ -28,6 +29,11 @@ local function new(buf: buffer): BufferReader
 
 		GetPos = function()
 			return pos
+		end,
+
+		readboolean = function()
+			pos += 1
+			return buffer.readu8(buf, pos) == 1
 		end,
 
 		readu8 = function(): number
