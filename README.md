@@ -4,7 +4,7 @@ A blazing fast & size effective Roblox instance serializer.
 **WARN:** I made that project in under 8 hours and it's missing the deserialization function, i will add it soon.
 
 # Benchmarks
-Output is up to *80%* smaller than the most common serialization method on heavy models.
+Output is up to *80%* smaller than the most common serialization method on heavy models, and **41%** smaller than you would get by saving a heavy model to a .rbxm file in Roblox Studio.
 
 Testing on my laptop it could serialize the entire Brookhaven Map(9797 instances) within ~0.054s.
 

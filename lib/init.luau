@@ -1,5 +1,6 @@
 local ClassDatas = require(script.modules.ClassDatas)
 local FastBufferStream = require(script.modules.FastBufferStream)
+local Compression = require(script.modules.Compression)
 
 type InstanceIdMap = {
 	[Instance]: number
@@ -68,7 +69,14 @@ local function Serialize(rootInstance: Instance)
 
 	SerializeLoop(bufferWriter, rootInstance, instanceIdMap)
 
-	return bufferWriter.buf
+	return buffer.tostring(bufferWriter.buf)
+end
+
+local function SerializeCompressed(rootInstance: Instance): string
+	local buf = Serialize(rootInstance)
+	buf = Compression.Zlib.Compress(buf)
+
+	return buf
 end
 
 local function Deserialize(b: FastBufferStream.BufferReader)
@@ -77,4 +85,5 @@ end
 
 return {
 	Serialize = Serialize,
+	SerializeCompressed = SerializeCompressed
 }
