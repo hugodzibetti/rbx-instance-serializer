@@ -1,5 +1,5 @@
 local APIDump = require(script.Parent.APIDump)
-local ValueTypeEnconding = require(script.Parent.ValueTypeEncoding)
+local BufferUtil = require(script.Parent["buffer-util"])
 local ClassFilters = require(script.Parent.Parent.constants.ClassFilters)
 local MemberFilters = require(script.Parent.Parent.constants.MemberFilters)
 local MemberTagBlacklist = require(script.Parent.Parent.constants.MemberTagBlacklist)
@@ -34,8 +34,8 @@ local ClassDatas: {
 				id: number,
 				name: string,
 				defaultValue: any,
-				write: ValueTypeEnconding.ValueTypeWrite,
-				read: ValueTypeEnconding.ValueTypeRead,
+				write: BufferUtil.BufferWriter,
+				read: BufferUtil.BufferReader,
 			},
 		},
 		instanceMembers: {
@@ -83,12 +83,12 @@ local function ProcessClassData(classId: number, className: string, classMembers
 
 		local memberValueTypeName = memberValueType.Name
 		local memberValueTypeCategory = memberValueType.Category
-		local memberValueTypeEnconding = ValueTypeEnconding[memberValueTypeName]
-		if not memberValueTypeEnconding then
-			memberValueTypeEnconding = ValueTypeEnconding[memberValueTypeCategory]
+		local memberBufferUtil = BufferUtil[memberValueTypeName]
+		if not memberBufferUtil then
+			memberBufferUtil = BufferUtil[memberValueTypeCategory]
 		end
 
-		if not memberValueTypeEnconding then
+		if not memberBufferUtil then
 			if memberValueTypeCategory == "Class" then
 				serialInstanceMembers[memberId] = {
 					id = memberId,
@@ -104,8 +104,8 @@ local function ProcessClassData(classId: number, className: string, classMembers
 		serialMembers[memberId] = {
 			id = memberId,
 			name = memberName,
-			write = memberValueTypeEnconding.write,
-			read = memberValueTypeEnconding.read,
+			write = memberBufferUtil.write,
+			read = memberBufferUtil.read,
 			defaultValue = instance[memberName],
 		}
 		memberId += 1
