@@ -2,7 +2,7 @@
 
 local BufferReader = require(script.BufferReader)
 local BufferWriter = require(script.BufferWriter)
-
+local DataTypeBuffer = require(script.DataTypeBuffer)
 local Types = require(script.Types)
 
 export type BufferWriter = Types.BufferWriter
@@ -40,7 +40,10 @@ export type BufferReader = Types.BufferReader
 	```
 ]=]
 
-return {
+local ReadWrite = DataTypeBuffer.ReadWrite
+local BufferUtil = {
 	reader = BufferReader.new,
 	writer = BufferWriter.new,
+	ReadWrite = ReadWrite,
 }
+return BufferUtil

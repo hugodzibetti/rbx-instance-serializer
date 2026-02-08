@@ -26,6 +26,9 @@ local function IsMemberProtected(member)
 	return memberSecurity and (memberSecurity.Read ~= "None" or memberSecurity.Write ~= "None")
 end
 
+type ValueTypeWrite = (b: BufferUtil.BufferWriter, v: any) -> ()
+type ValueTypeRead = (b: BufferUtil.BufferReader) -> any
+
 local ClassDatas: {
 	[string | number]: {
 		id: number,
@@ -34,8 +37,8 @@ local ClassDatas: {
 				id: number,
 				name: string,
 				defaultValue: any,
-				write: BufferUtil.BufferWriter,
-				read: BufferUtil.BufferReader,
+				write: ValueTypeWrite,
+				read: ValueTypeRead,
 			},
 		},
 		instanceMembers: {
