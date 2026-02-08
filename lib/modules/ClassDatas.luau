@@ -1,5 +1,5 @@
 local APIDump = require(script.Parent.APIDump)
-local BufferUtil = require(script.Parent["buffer-util"])
+local BufferUtil = require(script.Parent.BufferUtil)
 local ClassFilters = require(script.Parent.Parent.constants.ClassFilters)
 local MemberFilters = require(script.Parent.Parent.constants.MemberFilters)
 local MemberTagBlacklist = require(script.Parent.Parent.constants.MemberTagBlacklist)

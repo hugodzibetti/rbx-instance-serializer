@@ -1,5 +1,5 @@
 local ClassDatas = require(script.modules.ClassDatas)
-local BufferUtil = require(script.modules["buffer-util"])
+local BufferUtil = require(script.modules.BufferUtil)
 local Compression = require(script.modules.Compression)
 
 type InstanceIdMap = {
