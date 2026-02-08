@@ -7,3 +7,4 @@ realm = "shared"
 [dependencies]
 dump-parser = "csqrl/dump-parser@0.1.2"
 testez = "roblox/testez@0.4.1"
+buffer-util = "sleitnick/buffer-util@0.3.2"

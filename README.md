@@ -11,7 +11,7 @@ A blazing fast and size-efficient Roblox instance serializer.
 - Serializes the entire Brookhaven map (9,797 instances) in ~0.054s
 
 ## Roadmap
-- [x] Compression
-- [ ] GUI Plugin
+- [x] Add compression
+- [ ] GUI plugin
 
 *Speed tests made on a I7 12000h CPU*

@@ -1,75 +1,82 @@
 local ClassDatas = require(script.modules.ClassDatas)
-local FastBufferStream = require(script.modules.FastBufferStream)
+local BufferUtil = require(script.modules["buffer-util"])
 local Compression = require(script.modules.Compression)
 
 type InstanceIdMap = {
 	[Instance]: number
 }
 
-local function SerializeLoop(b: FastBufferStream.BufferWriter, instance: Instance, instanceIdMap: InstanceIdMap)
+local function SerializeLoop(bufferWriter: BufferUtil.BufferWriter, instance: Instance, instanceIdMap: InstanceIdMap)
 	local instanceClassData = ClassDatas[instance.ClassName]
 	if not instanceClassData then return end
 
-	b.writeu16(instanceClassData.id)
+	bufferWriter:WriteUInt8(instanceClassData.id)
 
 	-- Write members
-	local wroteMemberCountBufferPosition = b.GetPos()
-	b.Skip(1)
+	local wroteMemberCountBufferPosition = bufferWriter:GetCursor()
+	bufferWriter:WriteUInt8(0)
 
 	local wroteMemberCount = 0
 	for memberId, member in instanceClassData.members do
-		local instanceMemberValue = instance[member.name]
-		if instanceMemberValue == member.defaultValue then
+		local memberValue = instance[member.name]
+		if memberValue == member.defaultValue then
 			continue
 		end
 
-		b.writeu8(memberId)
-		member.write(b, instanceMemberValue)
+		bufferWriter:WriteUInt8(memberId)
+		member.write(bufferWriter, memberValue)
 		wroteMemberCount += 1
 	end
 
-    buffer.writeu8(b.buf, wroteMemberCountBufferPosition, wroteMemberCount)
+	local memberListEndPosition = bufferWriter:GetCursor()
+	bufferWriter:SetCursor(wroteMemberCountBufferPosition)
+    bufferWriter:WriteUInt8(wroteMemberCount)
+
+	bufferWriter:SetCursor(memberListEndPosition)
 
 	-- Now for instance valued members
-	local wroteInstanceMemberCountBufferPosition = b.GetPos()
-	b.Skip(1)
+	local wroteInstanceMemberCountBufferPosition = bufferWriter:GetCursor()
+	bufferWriter:WriteUInt8(0)
 
 	local wroteInstanceMemberCount = 0
 	for memberId, member in instanceClassData.instanceMembers do
-		local instanceMemberValue = instance[member.name]
-		if not instanceMemberValue then
+		local memberValue = instance[member.name]
+		if not memberValue then
 			continue
 		end
 
-		local respectiveInstanceId = instanceIdMap[instanceMemberValue]
-		b.writeu16(respectiveInstanceId)
+		local respectiveInstanceId = instanceIdMap[memberValue]
+		bufferWriter:WriteUInt16(respectiveInstanceId)
 
 		wroteInstanceMemberCount += 1
 	end
 
-	buffer.writeu8(b.buf, wroteInstanceMemberCountBufferPosition, wroteInstanceMemberCount)
+	local instanceMemberListEndPosition = bufferWriter:GetCursor()
+	bufferWriter:SetCursor(wroteMemberCountBufferPosition)
+    bufferWriter:WriteUInt8(wroteMemberCount)
+
+	bufferWriter:SetCursor(instanceMemberListEndPosition)
 
 	for _, child in instance:GetChildren() do
-		SerializeLoop(b, child, instanceIdMap)
+		SerializeLoop(bufferWriter, child, instanceIdMap)
 	end
 end
 
 local rootInstanceId = 0
 local function Serialize(rootInstance: Instance)
-	local descendants = rootInstance:GetDescendants()
-	local preAllocatedSize = (#descendants + 1) * 200
-	local bufferWriter = FastBufferStream.newWriter(preAllocatedSize)
-
+	local bufferWriter = BufferUtil.writer()
+	
 	local instanceIdMap: InstanceIdMap = {
 		[rootInstance] = rootInstanceId
 	}
+	local descendants = rootInstance:GetDescendants()
 	for instanceId, instance in descendants do
 		instanceIdMap[instance] = instanceId
 	end
 
 	SerializeLoop(bufferWriter, rootInstance, instanceIdMap)
 
-	return buffer.tostring(bufferWriter.buf)
+	return bufferWriter:ToString()
 end
 
 local function SerializeCompressed(rootInstance: Instance): string
@@ -79,7 +86,7 @@ local function SerializeCompressed(rootInstance: Instance): string
 	return buf
 end
 
-local function Deserialize(b: FastBufferStream.BufferReader)
+local function Deserialize(b: BufferUtil.BufferReader)
 	
 end
 
