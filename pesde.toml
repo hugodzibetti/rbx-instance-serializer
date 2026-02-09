@@ -1,0 +1,15 @@
+name = "hugodzibetti/brickpack"
+version = "0.1.0"
+description = "A ultra fast and size effective instance serialization library."
+authors = ["hugodzibetti"]
+license = "MIT"
+
+[target]
+environment = "lune"
+
+[indices]
+default = "https://github.com/pesde-pkg/index"
+
+[dependencies]
+rbx_api_dump = { name = "caveful_games/rbx_api_dump", version = "^0.1.0" }
+tiniest = { name = "ewdev/tiniest", version = "^0.0.0-20251120T191744Z" }

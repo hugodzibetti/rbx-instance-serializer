@@ -1,0 +1,16 @@
+name = "ewdev/tiniest"
+version = "0.0.0-20251120T191744Z"
+description = "A minimal, portable testing library for Luau"
+license = "BSD-3-Clause"
+authors = ["Daniel P H Fox (https://phfox.net/)", "EwDev (https://ewdev.net/)"]
+repository = "https://github.com/ewd3v/tiniest_pesde"
+private = false
+includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
+
+[target]
+environment = "lune"
+lib = "src/init.luau"
+
+[engines]
+pesde = "^0.7.1"
+lune = "^0.10.4"

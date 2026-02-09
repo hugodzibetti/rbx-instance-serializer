@@ -1,0 +1,8 @@
+{
+  "aliases": {
+    "packages": "lune_packages",
+    "src": "src",
+    "assets": "assets",
+    "lune": "~/.lune/.typedefs/0.10.4/"
+  }
+}
