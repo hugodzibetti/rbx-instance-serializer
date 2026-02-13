@@ -12,4 +12,5 @@ default = "https://github.com/pesde-pkg/index"
 
 [dependencies]
 rbx_api_dump = { name = "caveful_games/rbx_api_dump", version = "^0.1.0" }
-tiniest = { name = "ewdev/tiniest", version = "^0.0.0-20251120T191744Z" }
+frktest = { name = "itsfrank/frktest", version = "^0.0.2" }
+darklua = { name = "pesde/darklua", version = "^0.17.3" }

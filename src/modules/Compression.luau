@@ -1,3 +1,5 @@
+--!nocheck
+
 local Compression = {}
 local LibDeflate = {}
 
@@ -2965,7 +2967,7 @@ function LibDeflate:CreateCodec(reserved_chars, escape_chars
 		local decode_search = {}
 		local decode_translate = {}
 		for i = 1, #map_chars do
-			local from = string_sub(reserved_chars, i, i)
+			local from = string_sub(reserved_chars :: string, i, i)
 			local to = string_sub(map_chars, i, i)
 			encode_translate[from] = to
 			encode_search[#encode_search+1] = from
@@ -3047,7 +3049,7 @@ function LibDeflate:CreateCodec(reserved_chars, escape_chars
 	local decode_fail_pattern = "(["
 	.. escape_for_gsub(reserved_chars).."])"
 	
-	function codec:Decode(str)
+	function codec:Decode(str: string)
 		if type(str) ~= "string" then
 			error(("Usage: codec:Decode(str):"
 				.." 'str' - string expected got '%s'."):format(type(str)), 2)

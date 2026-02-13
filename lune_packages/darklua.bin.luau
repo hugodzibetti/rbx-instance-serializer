@@ -1,0 +1,2 @@
+_G.PESDE_ROOT = "\\\\?\\C:\\Users\\hugod\\OneDrive\\Área de Trabalho\\Projects\\rbx-brickpack\\lune_packages\\.pesde\\pesde+darklua\\0.17.3\\darklua"
+return require("./.pesde/pesde+darklua/0.17.3/darklua")

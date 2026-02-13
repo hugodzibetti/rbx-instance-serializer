@@ -1,8 +1,8 @@
-local Store = require("./Store")
-local Deleted = require("./Deleted")
-local privateKey = require("./privateKey")
-local StrictTable = require("./StrictTable")
-local getTraceback = require("./getTraceback")
+local Store = require("@self/Store")
+local Deleted = require("@self/Deleted")
+local privateKey = require("@self/privateKey")
+local StrictTable = require("@self/StrictTable")
+local getTraceback = require("@self/getTraceback")
 
 local inext = ipairs({})
 local namePrivateKey = StrictTable[privateKey][1]
