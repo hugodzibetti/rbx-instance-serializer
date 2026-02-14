@@ -1,5 +1,5 @@
-local t = require("./types")
-local string = require("./string")
+local t = require(script.Parent:FindFirstChild('types'))
+local string = require(script.Parent:FindFirstChild('string'))
 
 local enum: t.Converter<Enum> = {}
 

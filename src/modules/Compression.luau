@@ -2356,7 +2356,7 @@ local function DecodeUntilEndOfBlock(state, lcodes_huffman_bitlens
 		dict_strlen = dictionary.strlen
 		buffer_end = -dict_strlen + 1
 		for i=0, (-dict_strlen+1)<-257 and -257 or (-dict_strlen+1), -1 do
-			buffer[i] = _byte_to_char[dict_string_table[dict_strlen+i]]
+			buffer[i] = _byte_to_char[dict_string_table[dict_strlen+i] ]
 		end
 	end
 	
@@ -2402,7 +2402,7 @@ local function DecodeUntilEndOfBlock(state, lcodes_huffman_bitlens
 				for _=1, bitlen do
 					buffer_size = buffer_size + 1
 					buffer[buffer_size] =
-						_byte_to_char[dict_string_table[char_buffer_index]]
+						_byte_to_char[dict_string_table[char_buffer_index] ]
 					char_buffer_index = char_buffer_index + 1
 				end
 			end
@@ -2503,7 +2503,7 @@ local function DecompressDynamicBlock(state)
 	local rle_codes_huffman_bitlens = {}
 	
 	for i = 1, ncode do
-		rle_codes_huffman_bitlens[_rle_codes_huffman_bitlen_order[i]] =
+		rle_codes_huffman_bitlens[_rle_codes_huffman_bitlen_order[i] ] =
 			ReadBits(3)
 	end
 	

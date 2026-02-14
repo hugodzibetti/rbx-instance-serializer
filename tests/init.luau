@@ -1,8 +1,18 @@
-local frktest = require("@packages/frktest")
+local TestEZ = require(script.Parent:FindFirstChild("testez"):FindFirstChild("init"))
+local TextReporter = TestEZ.Reporters.TextReporter
 
-require("@self/Serialization.spec")()
+local root = script.Parent.Parent
+local src = root:FindFirstChild("src")
 
-local console_reporter = frktest._reporters.lune_console_reporter
-console_reporter.init()
+local BrickPack = require(src:WaitForChild("init"))
 
-frktest.run()
+TestEZ.TestBootstrap.run(
+	{ script.Parent },
+	TextReporter,
+	{
+		showTimingInfo = false,
+		extraEnvironment = {
+			BrickPack = BrickPack,
+		},
+	}
+)

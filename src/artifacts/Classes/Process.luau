@@ -1,10 +1,10 @@
 local RBXAPIDump = require("@packages/rbx_api_dump")
-local Serde = require("@src/modules/Serde")
-local ClassTagsFilter = require("@src/constants/rbx-api-filters/ClassTags")
-local MemberTagsFilter = require("@src/constants/rbx-api-filters/MemberTags")
-local MemberSecuritiesFilter = require("@src/constants/rbx-api-filters/MemberSecurities")
+local Serde = require(script.Parent.Parent.Parent:FindFirstChild('modules'):FindFirstChild('Serde'))
+local ClassTagsFilter = require(script.Parent.Parent.Parent:FindFirstChild('constants'):FindFirstChild('rbx-api-filters'):FindFirstChild('ClassTags'))
+local MemberTagsFilter = require(script.Parent.Parent.Parent:FindFirstChild('constants'):FindFirstChild('rbx-api-filters'):FindFirstChild('MemberTags'))
+local MemberSecuritiesFilter = require(script.Parent.Parent.Parent:FindFirstChild('constants'):FindFirstChild('rbx-api-filters'):FindFirstChild('MemberSecurities'))
 
-local Types = require("./Types")
+local Types = require(script.Parent:FindFirstChild('Types'))
 
 local ROBLOX_TYPE_TO_SERDE: { [string]: Types.SerdeConverter } = {
 	["string"] = Serde.string,

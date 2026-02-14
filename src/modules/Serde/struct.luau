@@ -1,6 +1,6 @@
-local t = require("./types")
-local util = require("./util")
-local number = require("./f64")
+local t = require(script.Parent:FindFirstChild('types'))
+local util = require(script.Parent:FindFirstChild('util'))
+local number = require(script.Parent:FindFirstChild('f64'))
 
 return function(dictionary: {[string]: t.Converter<t.Primitive>})
     local struct: t.Converter<{[string]: t.Converter<t.Primitive>}> = {}
@@ -19,7 +19,7 @@ return function(dictionary: {[string]: t.Converter<t.Primitive>})
         
         local t: {[string]: t.Converter<t.Primitive>} = {}
         for i = 1, length do
-            t[keys[i]] = util.packTupleIfExists(dictionary[keys[i]].read())
+            t[keys[i] ] = util.packTupleIfExists(dictionary[keys[i] ].read())
         end
 
         return t

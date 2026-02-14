@@ -1,5 +1,5 @@
 # rbx-instance-serializer
-**WARNING:** Im rewriting the project so its currently not usable, and as there's probably 0 people even seeing this currently, i wont even bother me setting the main branch with the old usable code and keep working with the new code in another branch; The project is much more clean and maintanable now so if anyone wants to spend some time to help create the only and best instance binary serializer for Roblox feel free to do so.
+**WARNING:** Im rewriting the project so its currently not usable, and as there's probably 0 people even seeing this currently, i wont even bother me setting the main branch with the old usable code and keep working with the new code in another branch.
 
 A blazing fast and size-efficient Roblox instance serializer.
 

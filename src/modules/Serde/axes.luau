@@ -1,5 +1,5 @@
-local t = require("./types")
-local sides = require("./sides")
+local t = require(script.Parent:FindFirstChild('types'))
+local sides = require(script.Parent:FindFirstChild('sides'))
 
 local faces: t.Converter<Faces> = {}
 

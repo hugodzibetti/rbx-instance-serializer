@@ -1,9 +1,9 @@
-local t = require("./types")
-local buff = require("./buff")
-local vec3 = require("./vec3")
-local string = require("./string")
-local enumItem = require("./enumItem")
-local option = require("./option")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local vec3 = require(script.Parent:FindFirstChild('vec3'))
+local string = require(script.Parent:FindFirstChild('string'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local option = require(script.Parent:FindFirstChild('option'))
 
 local optionString = option(string)
 

@@ -1,5 +1,5 @@
-local t = require("./types")
-local buff = require("./buff")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
 
 local bool: t.Converter<boolean> = {}
 

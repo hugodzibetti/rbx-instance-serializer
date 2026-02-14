@@ -1,7 +1,7 @@
-local t = require("./types")
-local string = require("./string")
-local enumItem = require("./enumItem")
-local bool = require("./bool")
+local t = require(script.Parent:FindFirstChild('types'))
+local string = require(script.Parent:FindFirstChild('string'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local bool = require(script.Parent:FindFirstChild('bool'))
 
 local font: t.Converter<Font> = {}
 

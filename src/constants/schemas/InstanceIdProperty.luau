@@ -1,4 +1,4 @@
-local Serde = require("./Serde")
+local Serde = require(script.Parent.Parent.Parent:FindFirstChild('modules'):FindFirstChild('Serde'))
 local struct = Serde.struct
 local number = Serde.number
 

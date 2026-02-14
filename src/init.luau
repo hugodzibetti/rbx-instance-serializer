@@ -1,9 +1,9 @@
-local Classes = require("@src/artifacts/Classes")
-local Types = require("@src/artifacts/Classes/Types")
-local buff = require("@src/modules/serde/buff")
-local Serde = require("@src/modules/serde")
-local FileSchema = require("@src/constants/schemas/File")
-local InstanceSchema = require("@src/constants/schemas/Instance")
+local Classes = require(script.artifacts.Classes)
+local Types = require(script.artifacts.Classes.Types)
+local buff = require(script.modules.Serde.buff)
+local Serde = require(script.modules.Serde)
+local FileSchema = require(script.constants.schemas.File)
+local InstanceSchema = require(script.constants.schemas.Instance)
 
 local BrickPack = {}
 

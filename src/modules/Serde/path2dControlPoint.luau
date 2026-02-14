@@ -1,5 +1,5 @@
-local t = require("./types")
-local udim2 = require("./udim2")
+local t = require(script.Parent:FindFirstChild('types'))
+local udim2 = require(script.Parent:FindFirstChild('udim2'))
 
 local path2dControlPoint: t.Converter<Path2DControlPoint> = {}
 

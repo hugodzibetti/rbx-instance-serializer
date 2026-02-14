@@ -1,6 +1,0 @@
-{
-  "aliases": {
-    "luau_pkg": "./luau_packages/",
-    "pkg": "./lune_packages/"
-  }
-}

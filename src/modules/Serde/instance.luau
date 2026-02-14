@@ -1,6 +1,6 @@
-local t = require("./types")
-local buff = require("./buff")
-local string = require("./string")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local string = require(script.Parent:FindFirstChild('string'))
 
 return function<T>(properties: T): t.CastConverter<Instance, T>
     local instance: t.CastConverter<Instance, T> = {}

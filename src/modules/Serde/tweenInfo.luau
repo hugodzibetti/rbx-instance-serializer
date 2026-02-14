@@ -1,8 +1,8 @@
-local t = require("./types")
-local buff = require("./buff")
-local number = require("./f64")
-local enumItem = require("./enumItem")
-local bool = require("./bool")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local number = require(script.Parent:FindFirstChild('f64'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local bool = require(script.Parent:FindFirstChild('bool'))
 
 local tweenInfo: t.Converter<TweenInfo> = {}
 

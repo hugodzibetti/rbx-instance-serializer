@@ -1,5 +1,5 @@
-local t = require("./types")
-local vec3 = require("./vec3")
+local t = require(script.Parent:FindFirstChild('types'))
+local vec3 = require(script.Parent:FindFirstChild('vec3'))
 
 local region3: t.Converter<Region3> = {}
 

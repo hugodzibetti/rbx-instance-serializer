@@ -1,6 +1,6 @@
-local t = require("./types")
-local number = require("./f64")
-local color3 = require("./col3")
+local t = require(script.Parent:FindFirstChild('types'))
+local number = require(script.Parent:FindFirstChild('f64'))
+local color3 = require(script.Parent:FindFirstChild('col3'))
 
 local colorSequenceKeypoint: t.Converter<ColorSequenceKeypoint> = {}
 

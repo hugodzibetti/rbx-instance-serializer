@@ -1,6 +1,6 @@
-local t = require("./types")
-local buff = require("./buff")
-local util = require("./util")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local util = require(script.Parent:FindFirstChild('util'))
 
 local f64: t.Converter<number> = {}
 

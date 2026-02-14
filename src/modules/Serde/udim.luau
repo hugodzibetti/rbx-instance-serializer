@@ -1,5 +1,5 @@
-local t = require("./types")
-local bool = require("./bool")
+local t = require(script.Parent:FindFirstChild('types'))
+local bool = require(script.Parent:FindFirstChild('bool'))
 
 local rbxScriptConnection: t.Converter<RBXScriptConnection> = {}
 

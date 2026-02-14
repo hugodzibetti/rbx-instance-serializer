@@ -1,8 +1,8 @@
-local t = require("./types")
-local buff = require("./buff")
-local number = require("./f64")
-local enumItem = require("./enumItem")
-local cframe = require("./cframe")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local number = require(script.Parent:FindFirstChild('f64'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local cframe = require(script.Parent:FindFirstChild('cframe'))
 
 local rotationCurveKey: t.Converter<RotationCurveKey> = {}
 

@@ -1,4 +1,4 @@
-local Serde = require("@src/modules/Serde")
+local Serde = require(script.Parent.Parent.Parent:FindFirstChild('modules'):FindFirstChild('Serde'))
 
 export type SerdeConverter = typeof(Serde.vector3)
 export type ApiValueType = { Category: string, Name: string }

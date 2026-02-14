@@ -1,0 +1,25 @@
+{
+	"name": "rbx-brickpack",
+	"tree": {
+		"$className": "DataModel",
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"src": {
+				"$path": "src"
+			},
+			"tests": {
+				"$path": "tests"
+			},
+			"assets": {
+				"$path": "assets"
+			}
+		}
+	},
+	"globIgnorePaths": [
+		".git*",
+		"luau_packages*",
+		"lune_packages*",
+		"*.lock",
+		"node_modules"
+	]
+}

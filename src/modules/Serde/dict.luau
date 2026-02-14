@@ -1,6 +1,6 @@
-local t = require("./types")
-local util = require("./util")
-local number = require("./f64")
+local t = require(script.Parent:FindFirstChild('types'))
+local util = require(script.Parent:FindFirstChild('util'))
+local number = require(script.Parent:FindFirstChild('f64'))
 
 return function<K, V>(key: t.Converter<K>, value: t.Converter<V>)
     local dict: t.Converter<{[K]: V}> = {}

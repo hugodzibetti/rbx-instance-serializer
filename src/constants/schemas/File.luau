@@ -1,5 +1,5 @@
-local InstanceSchema = require("./Instance")
-local Serde = require("./Serde")
+local InstanceSchema = require(script.Parent:FindFirstChild('Instance'))
+local Serde = require(script.Parent.Parent.Parent:FindFirstChild('modules'):FindFirstChild('Serde'))
 local struct = Serde.struct
 local array = Serde.array
 local number = Serde.number

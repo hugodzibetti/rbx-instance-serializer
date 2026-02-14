@@ -1,5 +1,5 @@
-local t = require("./types")
-local udim = require("./udim")
+local t = require(script.Parent:FindFirstChild('types'))
+local udim = require(script.Parent:FindFirstChild('udim'))
 
 local udim2: t.Converter<UDim2> = {}
 

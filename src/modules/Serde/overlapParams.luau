@@ -1,9 +1,9 @@
-local t = require("./types")
-local buff = require("./buff")
-local string = require("./string")
-local enumItem = require("./enumItem")
-local number = require("./f64")
-local bool = require("./bool")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local string = require(script.Parent:FindFirstChild('string'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local number = require(script.Parent:FindFirstChild('f64'))
+local bool = require(script.Parent:FindFirstChild('bool'))
 
 local overlapParams: t.Converter<OverlapParams> = {}
 

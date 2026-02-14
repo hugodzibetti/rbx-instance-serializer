@@ -1,6 +1,6 @@
-local t = require("./types")
-local enumItem = require("./enumItem")
-local string = require("./string")
+local t = require(script.Parent:FindFirstChild('types'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local string = require(script.Parent:FindFirstChild('string'))
 
 local content: t.Converter<Content> = {}
 

@@ -1,5 +1,5 @@
-local t = require("./types")
-local number = require("./f64")
+local t = require(script.Parent:FindFirstChild('types'))
+local number = require(script.Parent:FindFirstChild('f64'))
 
 local dateTime: t.Converter<DateTime> = {}
 

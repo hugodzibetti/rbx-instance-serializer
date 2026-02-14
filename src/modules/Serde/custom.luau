@@ -1,5 +1,5 @@
-local buff = require("./buff")
-local t = require("./types")
+local buff = require(script.Parent:FindFirstChild('buff'))
+local t = require(script.Parent:FindFirstChild('types'))
 
 export type CursorController = {
     getBuffer: () -> buffer,

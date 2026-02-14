@@ -1,6 +1,6 @@
-local t = require("./types")
-local array = require("./array")
-local colorSequenceKeypoint = require("./colorSequenceKeypoint")
+local t = require(script.Parent:FindFirstChild('types'))
+local array = require(script.Parent:FindFirstChild('array'))
+local colorSequenceKeypoint = require(script.Parent:FindFirstChild('colorSequenceKeypoint'))
 
 local arraySeq = array(colorSequenceKeypoint)
 

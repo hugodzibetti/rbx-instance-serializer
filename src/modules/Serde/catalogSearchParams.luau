@@ -1,9 +1,9 @@
-local t = require("./types")
-local string = require("./string")
-local number = require("./f64")
-local enumItem = require("./enumItem")
-local array = require("./array")
-local bool = require("./bool")
+local t = require(script.Parent:FindFirstChild('types'))
+local string = require(script.Parent:FindFirstChild('string'))
+local number = require(script.Parent:FindFirstChild('f64'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
+local array = require(script.Parent:FindFirstChild('array'))
+local bool = require(script.Parent:FindFirstChild('bool'))
 
 local enumArr = array(enumItem)
 

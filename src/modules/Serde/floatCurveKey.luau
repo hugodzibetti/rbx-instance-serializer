@@ -1,8 +1,8 @@
-local t = require("./types")
-local buff = require("./buff")
-local number = require("./f64")
-local option = require("./option")
-local enumItem = require("./enumItem")
+local t = require(script.Parent:FindFirstChild('types'))
+local buff = require(script.Parent:FindFirstChild('buff'))
+local number = require(script.Parent:FindFirstChild('f64'))
+local option = require(script.Parent:FindFirstChild('option'))
+local enumItem = require(script.Parent:FindFirstChild('enumItem'))
 
 local optionNumber = option(number)
 

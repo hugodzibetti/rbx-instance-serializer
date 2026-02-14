@@ -1,4 +1,4 @@
-local buff = require("./buff")
+local buff = require(script.Parent:FindFirstChild('buff'))
 
 local sides = {}
 

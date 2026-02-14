@@ -1,4 +1,4 @@
-local Serde = require("@src/modules/Serde")
+local Serde = require(script.Parent.Parent.Parent:FindFirstChild('modules'):FindFirstChild('Serde'))
 
 local PropertyEntry = Serde.struct({
 	name = Serde.string,

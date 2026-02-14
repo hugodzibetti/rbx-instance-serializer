@@ -5,12 +5,16 @@ authors = ["hugodzibetti"]
 license = "MIT"
 
 [target]
-environment = "lune"
+environment = "roblox"
+
+[engines]
+lune = "^0.8.0"
 
 [indices]
 default = "https://github.com/pesde-pkg/index"
 
+[scripts]
+install-packages = "scripts/InstallPackages.luau"
+convert-requires = "scripts/ConvertRequires/init.luau"
+
 [dependencies]
-rbx_api_dump = { name = "caveful_games/rbx_api_dump", version = "^0.1.0" }
-frktest = { name = "itsfrank/frktest", version = "^0.0.2" }
-darklua = { name = "pesde/darklua", version = "^0.17.3" }

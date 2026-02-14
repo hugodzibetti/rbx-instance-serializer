@@ -1,4 +1,4 @@
-local t = require("./types")
+local t = require(script.Parent:FindFirstChild('types'))
 
 local random: t.Converter<Random> = {}
 
