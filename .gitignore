@@ -3,3 +3,4 @@ luau_packages/
 roblox_packages/
 sourcemap.json
 .claude/
+bench/fixtures/large-samples.luau
