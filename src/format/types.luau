@@ -18,6 +18,7 @@ export type ClassBlock = {
 	classId: number,
 	instanceCount: number,
 	columns: { PropertyColumn },
+	templateRefs: { number }?, -- parallel array, length instanceCount. 0 = not a duplicate (or is a template leader). k>0 = this instance duplicates the instance at 1-based position k within this block (k must itself have templateRefs[k] == 0).
 }
 
 export type FormatData = {

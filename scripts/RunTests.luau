@@ -2,6 +2,7 @@ local process = require("@lune/process")
 local frktest = require("@packages/frktest")
 
 require("@tests/Buffer.spec")()
+require("@tests/Compat.spec")()
 require("@tests/SerdeArray.spec")()
 require("@tests/SerdeCFrame.spec")()
 require("@tests/SerdeColor.spec")()
@@ -19,6 +20,7 @@ require("@tests/SerdeVector.spec")()
 require("@tests/Artifact.spec")()
 require("@tests/SerdeReferent.spec")()
 require("@tests/Format.spec")()
+require("@tests/Instance.spec")()
 
 local lune_console_reporter = (frktest :: any)._reporters.lune_console_reporter
 lune_console_reporter.init()

@@ -62,6 +62,22 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 	for _, cb in data.classBlocks do
 		w:varint(cb.classId)
 		w:varint(cb.instanceCount)
+
+		local effectiveCount = cb.instanceCount
+		if cb.templateRefs then
+			w:varint(1)
+			-- ponytail: templateRefs stored as raw varints, upgrade: RLE if profiling shows it matters
+			effectiveCount = 0
+			for i = 1, cb.instanceCount do
+				w:varint(cb.templateRefs[i])
+				if cb.templateRefs[i] == 0 then
+					effectiveCount += 1
+				end
+			end
+		else
+			w:varint(0)
+		end
+
 		w:varint(#cb.columns)
 
 		for _, col in cb.columns do
@@ -86,9 +102,9 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 			else
 				-- raw (0) or RLE (1)
 				-- Pack bitmask
-				local numBytes = math.ceil(cb.instanceCount / 8)
+				local numBytes = math.ceil(effectiveCount / 8)
 				local maskBytes = buffer.create(numBytes)
-				for i = 1, cb.instanceCount do
+				for i = 1, effectiveCount do
 					if col.bitmask[i] then
 						local byteIdx = math.floor((i - 1) / 8)
 						local bitIdx = (i - 1) % 8

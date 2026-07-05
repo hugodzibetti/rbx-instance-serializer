@@ -67,6 +67,19 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 			currentInstanceIdx += 1
 		end
 
+		local effectiveIndices: { number }? = nil
+		local effectiveCount = cb.instanceCount
+		if cb.templateRefs then
+			local indices = {}
+			for i = 1, cb.instanceCount do
+				if cb.templateRefs[i] == 0 then
+					table.insert(indices, i)
+				end
+			end
+			effectiveIndices = indices
+			effectiveCount = #indices
+		end
+
 		for _, col in cb.columns do
 			local propName = formatData.stringTable[col.propertyNameIndex]
 			assert(propName, "Property name index out of bounds in string table")
@@ -81,34 +94,35 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 			end
 			assert(pm, "Property metadata not found for property: " .. propName .. " in class ID: " .. tostring(cb.classId))
 
-			-- Reconstruct values array
-			local values = table.create(cb.instanceCount)
+			-- Reconstruct values array (over effective/leader positions only)
+			local values = table.create(effectiveCount)
 			if col.encoding == 3 then -- AllDefault
-				for i = 1, cb.instanceCount do
-					values[i] = pm.default
+				for k = 1, effectiveCount do
+					values[k] = pm.default
 				end
 			elseif col.encoding == 4 then -- AllNonDefault
-				for i = 1, cb.instanceCount do
-					values[i] = col.values[i]
+				for k = 1, effectiveCount do
+					values[k] = col.values[k]
 				end
 			elseif col.encoding == 0 or col.encoding == 1 then
 				local nonDefaultIdx = 1
-				for i = 1, cb.instanceCount do
-					if col.bitmask[i] then
-						values[i] = col.values[nonDefaultIdx]
+				for k = 1, effectiveCount do
+					if col.bitmask[k] then
+						values[k] = col.values[nonDefaultIdx]
 						nonDefaultIdx += 1
 					else
-						values[i] = pm.default
+						values[k] = pm.default
 					end
 				end
 			else
 				error("Unsupported encoding: " .. tostring(col.encoding))
 			end
 
-			-- Apply values to instances
-			for i = 1, cb.instanceCount do
+			-- Apply values to instances (leader/plain positions only; duplicates copied below)
+			for k = 1, effectiveCount do
+				local i = if effectiveIndices then effectiveIndices[k] else k
 				local inst = classInstances[i]
-				local val = values[i]
+				local val = values[k]
 
 				if pm.codecId == 26 then -- Referent
 					if pm.name == "Parent" then
@@ -146,6 +160,22 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 					if val ~= nil then
 						pcall(function()
 							inst[pm.name] = val
+						end)
+					end
+				end
+			end
+		end
+
+		-- Duplicate instances: copy every property from their template leader
+		if cb.templateRefs then
+			for i = 1, cb.instanceCount do
+				local leaderIdx = cb.templateRefs[i]
+				if leaderIdx ~= 0 then
+					local leaderInst = classInstances[leaderIdx]
+					local inst = classInstances[i]
+					for _, pm in classMeta.properties do
+						pcall(function()
+							inst[pm.name] = leaderInst[pm.name]
 						end)
 					end
 				end

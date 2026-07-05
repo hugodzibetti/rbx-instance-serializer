@@ -45,6 +45,7 @@ local function load(artifactBuffer: buffer): ArtifactData
 		for _ = 1, propCount do
 			local propName = r:string()
 			local codecId = r:varint()
+
 			local paramCount = r:varint()
 			local codecParams: { number }? = nil
 			if paramCount > 0 then

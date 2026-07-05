@@ -47,6 +47,22 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 	for i = 1, classBlockCount do
 		local classId = r:varint()
 		local instanceCount = r:varint()
+
+		local hasTemplateRefs = r:varint() == 1
+		local templateRefs: { number }? = nil
+		local effectiveCount = instanceCount
+		if hasTemplateRefs then
+			local refs = table.create(instanceCount)
+			effectiveCount = 0
+			for k = 1, instanceCount do
+				refs[k] = r:varint()
+				if refs[k] == 0 then
+					effectiveCount += 1
+				end
+			end
+			templateRefs = refs
+		end
+
 		local propertyCount = r:varint()
 
 		local columns = table.create(propertyCount)
@@ -68,21 +84,21 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 
 			if encoding == 3 then
 				-- AllDefault: no bitmask, no values.
-				bitmask = table.create(instanceCount, false)
+				bitmask = table.create(effectiveCount, false)
 			elseif encoding == 4 then
 				-- AllNonDefault: no bitmask, read all values directly.
-				bitmask = table.create(instanceCount, true)
-				values = table.create(instanceCount)
-				for k = 1, instanceCount do
+				bitmask = table.create(effectiveCount, true)
+				values = table.create(effectiveCount)
+				for k = 1, effectiveCount do
 					values[k] = codec.read(r)
 				end
 			elseif encoding == 0 or encoding == 1 then
 				-- Unpack bitmask
-				bitmask = table.create(instanceCount)
-				local numBytes = math.ceil(instanceCount / 8)
+				bitmask = table.create(effectiveCount)
+				local numBytes = math.ceil(effectiveCount / 8)
 				local maskBytes = r:bytes(numBytes)
 				local nonDefaultCount = 0
-				for k = 1, instanceCount do
+				for k = 1, effectiveCount do
 					local byteIdx = math.floor((k - 1) / 8)
 					local bitIdx = (k - 1) % 8
 					local byteVal = buffer.readu8(maskBytes, byteIdx)
@@ -126,6 +142,7 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 			classId = classId,
 			instanceCount = instanceCount,
 			columns = columns,
+			templateRefs = templateRefs,
 		}
 	end
 

@@ -135,18 +135,30 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			continue
 		end
 
-		local columns: { PropertyColumn } = {}
+		local numBucket = #bucket
 
+		local propsWithCodec = {}
 		for _, pm in classMeta.properties do
-			local codec = pm.codec
-			if not codec then
-				continue
+			if pm.codec then
+				table.insert(propsWithCodec, pm)
 			end
+		end
 
-			local allValues = {}
-			local nonDefaultValues = {}
-			local bitmask = {}
-			local nonDefaultCount = 0
+		local hasReferent = false
+		for _, pm in propsWithCodec do
+			if pm.codecId == 26 then
+				hasReferent = true
+				break
+			end
+		end
+
+		-- Pass A: compute serialized value + isDefault for every property/instance
+		local serializedByProp = table.create(#propsWithCodec)
+		local isDefaultByProp = table.create(#propsWithCodec)
+
+		for pIdx, pm in propsWithCodec do
+			local serializedVals = table.create(numBucket)
+			local isDefaults = table.create(numBucket)
 
 			for i, inst in bucket do
 				local ok, val = pcall(function()
@@ -177,8 +189,86 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 					isDefault = (val == pm.default)
 				end
 
-				allValues[i] = serializedVal
-				bitmask[i] = not isDefault
+				serializedVals[i] = serializedVal
+				isDefaults[i] = isDefault
+			end
+
+			serializedByProp[pIdx] = serializedVals
+			isDefaultByProp[pIdx] = isDefaults
+		end
+
+		-- Template detection: whole-instance dedup within this class bucket.
+		-- Skipped for buckets with a Referent property, since duplicate instances
+		-- can't safely share reference-target semantics.
+		local templateRefs: { number }? = nil
+		if not hasReferent and numBucket >= 2 and #propsWithCodec > 0 then
+			-- ponytail: O(n^2) dedup scan per class bucket, upgrade: hash canonical value tuples if profiling shows buckets are large
+			local refs = table.create(numBucket, 0)
+			for i = 1, numBucket do
+				if refs[i] == 0 then
+					for j = i + 1, numBucket do
+						if refs[j] == 0 then
+							local equal = true
+							for pIdx = 1, #propsWithCodec do
+								if serializedByProp[pIdx][i] ~= serializedByProp[pIdx][j] then
+									equal = false
+									break
+								end
+							end
+							if equal then
+								refs[j] = i
+							end
+						end
+					end
+				end
+			end
+
+			local anyDup = false
+			for i = 1, numBucket do
+				if refs[i] ~= 0 then
+					anyDup = true
+					break
+				end
+			end
+
+			if anyDup then
+				templateRefs = refs
+			end
+		end
+
+		local effectiveIndices: { number }? = nil
+		local effectiveCount = numBucket
+		if templateRefs then
+			local indices = {}
+			for i = 1, numBucket do
+				if templateRefs[i] == 0 then
+					table.insert(indices, i)
+				end
+			end
+			effectiveIndices = indices
+			effectiveCount = #indices
+		end
+
+		local columns: { PropertyColumn } = {}
+
+		for pIdx, pm in propsWithCodec do
+			local codec = pm.codec
+
+			local serializedVals = serializedByProp[pIdx]
+			local isDefaults = isDefaultByProp[pIdx]
+
+			local allValues = table.create(effectiveCount)
+			local bitmask = table.create(effectiveCount)
+			local nonDefaultValues = {}
+			local nonDefaultCount = 0
+
+			for k = 1, effectiveCount do
+				local i = if effectiveIndices then effectiveIndices[k] else k
+				local serializedVal = serializedVals[i]
+				local isDefault = isDefaults[i]
+
+				allValues[k] = serializedVal
+				bitmask[k] = not isDefault
 
 				if not isDefault then
 					table.insert(nonDefaultValues, serializedVal)
@@ -192,10 +282,10 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			if nonDefaultCount == 0 then
 				encoding = 3
 				colValues = {}
-				bitmask = table.create(#bucket, false)
+				bitmask = table.create(effectiveCount, false)
 			else
 				-- Raw cost
-				local sizeRaw = math.ceil(#bucket / 8)
+				local sizeRaw = math.ceil(effectiveCount / 8)
 				for _, v in nonDefaultValues do
 					sizeRaw += getValueSize(codec, v)
 				end
@@ -203,7 +293,7 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 
 				-- RLE cost
 				local runs = runLengthEncode(nonDefaultValues)
-				local sizeRle = math.ceil(#bucket / 8) + varintSize(#runs)
+				local sizeRle = math.ceil(effectiveCount / 8) + varintSize(#runs)
 				for _, run in runs do
 					sizeRle += varintSize(run.count) + getValueSize(codec, run.value)
 				end
@@ -215,7 +305,7 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 				end
 
 				-- AllNonDefault cost
-				if nonDefaultCount == #bucket then
+				if nonDefaultCount == effectiveCount then
 					local sizeAllNonDefault = 0
 					for _, v in allValues do
 						sizeAllNonDefault += getValueSize(codec, v)
@@ -224,7 +314,7 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 						minSize = sizeAllNonDefault
 						encoding = 4
 						colValues = allValues
-						bitmask = table.create(#bucket, true)
+						bitmask = table.create(effectiveCount, true)
 					end
 				end
 			end
@@ -239,8 +329,9 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 
 		table.insert(classBlocks, {
 			classId = classMeta.id,
-			instanceCount = #bucket,
+			instanceCount = numBucket,
 			columns = columns,
+			templateRefs = templateRefs,
 		})
 	end
 
