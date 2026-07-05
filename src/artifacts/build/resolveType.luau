@@ -13,7 +13,8 @@ export type ResolvedType = {
 -- cframe=6, color3=7, brickColor=8, colorSequence=9, colorSequenceKeypoint=10,
 -- numberRange=11, numberSequence=12, numberSequenceKeypoint=13,
 -- udim=14, udim2=15, vector2=16, vector3=17, rect=18, axes=19, faces=20,
--- physicalProperties=21, font=22, content=23, uniqueId=24, enumItem=25
+-- physicalProperties=21, font=22, content=23, uniqueId=24, enumItem=25,
+-- referent=26, ray=27
 
 local LEAF_MAP: { [string]: number } = {
 	float = 0,
@@ -41,6 +42,9 @@ local LEAF_MAP: { [string]: number } = {
 	Content = 23,
 	UniqueId = 24,
 	Enum = 25,
+	ProtectedString = 3,
+	ContentId = 3,
+	Ray = 27,
 }
 
 local function resolveLeaf(typeName: string): number?
