@@ -2,6 +2,7 @@ local process = require("@lune/process")
 local frktest = require("@packages/frktest")
 
 require("@tests/Buffer.spec")()
+require("@tests/Compat.spec")()
 require("@tests/SerdeArray.spec")()
 require("@tests/SerdeCFrame.spec")()
 require("@tests/SerdeColor.spec")()
