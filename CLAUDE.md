@@ -65,8 +65,8 @@ lune run tests/_scratch_run.luau  # see tests/*.spec.luau for pattern
 
 **Running**:
 
-- `pesde run test` loads all specs and runs them via frktest's lune reporter.
-- Current `scripts/RunTests.luau` only loads `Buffer.spec`; integration step (post-batch) will wire all 14 new specs.
+- `pesde run test` loads all 20 test specs and runs them via frktest's lune reporter.
+- All specs wired into `scripts/RunTests.luau`: Buffer, Serde (11 types + Referent), Artifact, Format, Instance, Compat.
 
 ## Require Aliases
 
@@ -94,28 +94,42 @@ Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. Thi
 1. **Modularity**: each codec is a small (~20–50 line), independent file. Enables parallel development and clean merges.
 2. **Varint for variable-length data**: ids, counts, indices use LEB128 (zigzag for signed). Huge win for small values.
 3. **No runtime reflection**: all type information is resolved at artifact-build time or codecs are written with knowledge of their type.
-4. **Columnar/SoA for class blocks**: (future) instances grouped by class, properties stored as columns, enables compression and delta encoding.
-5. **Backward compat via versioned schema**: files include schemaVersion in header; translation maps in `compat/` will handle API-dump changes (not yet built).
+4. **Columnar/SoA for class blocks**: ✅ instances grouped by class, properties stored as columns with per-column encoding (raw, RLE, AllDefault, AllNonDefault). Enables compression and delta encoding.
+5. **Backward compat via versioned schema**: ✅ files include schemaVersion in header; migration registry in `src/compat/` provides hooks for future API-dump changes.
 
 ## Design Docs
 
-- `docs/superpowers/specs/2026-07-02-codec-benchmarks-design.md` — codec design & benchmarks
+- `docs/superpowers/specs/2026-07-02-codec-benchmarks-design.md` — codec design & benchmarks ✅ (benchmark harness complete)
 - `docs/superpowers/specs/2026-07-04-artifact-system-design.md` — artifact system design ✅ (fully implemented)
-- `docs/superpowers/specs/2026-07-04-format-layer-design.md` — format container, columnar layout, bitmasks, RLE
+- `docs/superpowers/specs/2026-07-04-format-layer-design.md` — format container, columnar layout, bitmasks, RLE ✅ (fully implemented)
 - `docs/glossary.md` — terminology reference (varint, bitmask, RLE, columnar, etc.)
 - `docs/examples/` — supplementary examples (varint, bitmask, RLE, columnar-vs-row, format-binary)
 
-## Next Steps
+## Completed Milestones
 
-1. ~~**Artifact system**~~ ✅ Done — `src/artifacts/` is fully functional.
-2. **Format/Container** (`src/format/`): header, string table, tag table, columnar class blocks with per-column encoding (raw, RLE). See `docs/superpowers/specs/2026-07-04-format-layer-design.md`.
-3. **Instance layer** (`src/instance/`): traverse → index, serialize/deserialize, optimize (default elision, dedup, template detection).
-4. **Compat system** (`src/compat/`): versioned schema registry + translation maps for future-proofing.
-5. **Integration**: wire all specs into `scripts/RunTests.luau`, create central serde registry in `src/serde/init.luau`.
+1. ✅ **Artifact system** — `src/artifacts/` fully functional, includes build/parse/resolve/load.
+2. ✅ **Format/Container** — `src/format/` implements header, string table, columnar class blocks with 4 encodings (raw, RLE, AllDefault, AllNonDefault).
+3. ✅ **Instance layer** — `src/instance/` serializes/deserializes Roblox instances with default elision, instance dedup, and template detection.
+4. ✅ **Compat system** — `src/compat/` provides versioned schema registry with migration hooks.
+5. ✅ **Integration** — all 20 test specs wired; central serde registry at `src/serde/init.luau` (27 codecs + factories).
 
-## Notes
+## Current Work
+
+1. **Roblox Package Polish**: Create standalone Roblox package output; wire darklua to publish `@src/...` requires as relative paths for Studio import.
+2. **Performance Tuning**: Profile benchmarks from PR #18; identify hot paths (CFrame, array encode/decode, bitmask packing); apply micro-optimizations.
+3. **Documentation & Examples**: Write user guide (serialize/deserialize API, artifact format, extending codecs); add end-to-end example (load Roblox place → serialize → read back).
+
+## Implementation Notes
 
 - **frktest**: the test framework; minimal but effective. Tests are plain Luau functions that call `test.case()` and `check.equal()`.
 - **pesde**: Luau package manager; replaces wally for this project.
 - **lune**: Lua/Luau runtime; runs tests and build scripts outside of Roblox Studio.
-- **darklua**: AST processor; converts Luau `@alias/...` requires to relative paths for Roblox deployment (not yet applied).
+- **darklua**: AST processor; converts Luau `@alias/...` requires to relative paths for Roblox deployment. Config at `.darklua.json` (PR #17).
+
+## Updating This File
+
+After completing work, update CLAUDE.md to reflect:
+- Completed milestones moved to "Completed Milestones" section with ✅ checkmarks.
+- Current/in-progress work listed under "Current Work" with clear scope & rationale.
+- Design decisions or architectural changes documented in the relevant section.
+- New gotchas or gotcha resolutions added to "Implementation Notes" for future context.
