@@ -5,3 +5,4 @@ sourcemap.json
 .claude/
 bench/fixtures/large-samples.luau
 data/artifact.bin
+.vscode/
