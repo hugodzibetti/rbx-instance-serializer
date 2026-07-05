@@ -81,6 +81,7 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 
 			local bitmask: { boolean } = {}
 			local values: { any } = {}
+			local dictIndices: { number }? = nil
 
 			if encoding == 3 then
 				-- AllDefault: no bitmask, no values.
@@ -92,7 +93,7 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 				for k = 1, effectiveCount do
 					values[k] = codec.read(r)
 				end
-			elseif encoding == 0 or encoding == 1 then
+			elseif encoding == 0 or encoding == 1 or encoding == 2 then
 				-- Unpack bitmask
 				bitmask = table.create(effectiveCount)
 				local numBytes = math.ceil(effectiveCount / 8)
@@ -128,6 +129,18 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 							table.insert(values, value)
 						end
 					end
+				elseif encoding == 2 then
+					-- Dictionary: read unique values, then per-instance dict index
+					local uniqueCount = r:varint()
+					values = table.create(uniqueCount)
+					for k = 1, uniqueCount do
+						values[k] = codec.read(r)
+					end
+					local indices = table.create(nonDefaultCount)
+					for k = 1, nonDefaultCount do
+						indices[k] = r:varint()
+					end
+					dictIndices = indices
 				end
 			else
 				error("Unsupported encoding type: " .. tostring(encoding))
@@ -138,6 +151,7 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 				encoding = encoding,
 				bitmask = bitmask,
 				values = values,
+				dictIndices = dictIndices,
 			}
 		end
 

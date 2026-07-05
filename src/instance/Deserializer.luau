@@ -114,6 +114,18 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 						values[k] = pm.default
 					end
 				end
+			elseif col.encoding == 2 then -- Dictionary
+				assert(col.dictIndices, "Dictionary-encoded column missing dictIndices")
+				local dictIndices = col.dictIndices
+				local nonDefaultIdx = 1
+				for k = 1, effectiveCount do
+					if col.bitmask[k] then
+						values[k] = col.values[dictIndices[nonDefaultIdx] + 1] -- 0-based -> 1-based
+						nonDefaultIdx += 1
+					else
+						values[k] = pm.default
+					end
+				end
 			else
 				error("Unsupported encoding: " .. tostring(col.encoding))
 			end
