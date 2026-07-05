@@ -104,13 +104,24 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 				-- Pack bitmask
 				local numBytes = math.ceil(effectiveCount / 8)
 				local maskBytes = buffer.create(numBytes)
+				local bitmask = col.bitmask
+				local byteIdx = 0
+				local acc = 0
+				local bitIdx = 0
 				for i = 1, effectiveCount do
-					if col.bitmask[i] then
-						local byteIdx = math.floor((i - 1) / 8)
-						local bitIdx = (i - 1) % 8
-						local current = buffer.readu8(maskBytes, byteIdx)
-						buffer.writeu8(maskBytes, byteIdx, bit32.bor(current, bit32.lshift(1, bitIdx)))
+					if bitmask[i] then
+						acc = bit32.bor(acc, bit32.lshift(1, bitIdx))
 					end
+					bitIdx += 1
+					if bitIdx == 8 then
+						buffer.writeu8(maskBytes, byteIdx, acc)
+						byteIdx += 1
+						acc = 0
+						bitIdx = 0
+					end
+				end
+				if bitIdx > 0 then
+					buffer.writeu8(maskBytes, byteIdx, acc)
 				end
 				w:bytes(maskBytes)
 
