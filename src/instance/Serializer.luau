@@ -113,10 +113,6 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 		end
 	end
 
-	for k, v in globalIdMap do
-		print("DEBUG globalIdMap key:", k, "id:", v)
-	end
-
 	local stringTable: { string } = {}
 	local stringMap: { [string]: number } = {}
 	local function getStringIndex(str: string): number
@@ -179,10 +175,6 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 					isDefault = (serializedVal == 0)
 				else
 					isDefault = (val == pm.default)
-				end
-
-				if pm.name == "Parent" then
-					print("DEBUG Serializer Parent on", inst.Name, "val:", val and val.Name, "serializedVal:", serializedVal, "pm.default:", pm.default, "isDefault:", isDefault)
 				end
 
 				allValues[i] = serializedVal

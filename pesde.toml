@@ -19,6 +19,7 @@ default = "https://github.com/pesde-pkg/index"
 test = "scripts/RunTests.luau"
 artifact = "src/artifacts/build/Run.luau"
 roundtrip = "scripts/RoundTrip.luau"
+bench-pipeline = "bench/RunPipeline.luau"
 
 [dependencies]
 

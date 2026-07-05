@@ -45,8 +45,7 @@ local function load(artifactBuffer: buffer): ArtifactData
 		for _ = 1, propCount do
 			local propName = r:string()
 			local codecId = r:varint()
-
-https://github.com/monil-patel/vscode-keyboard-shortcut-exthttps://github.com/monil-patel/vscode-keyboard-shortcut-ext			local paramCount = r:varint()
+			local paramCount = r:varint()
 			local codecParams: { number }? = nil
 			if paramCount > 0 then
 				codecParams = {}

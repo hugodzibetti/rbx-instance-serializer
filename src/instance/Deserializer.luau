@@ -81,8 +81,6 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 			end
 			assert(pm, "Property metadata not found for property: " .. propName .. " in class ID: " .. tostring(cb.classId))
 
-			print("DEBUG visiting property:", pm.name, "codecId:", pm.codecId)
-
 			-- Reconstruct values array
 			local values = table.create(cb.instanceCount)
 			if col.encoding == 3 then -- AllDefault
@@ -161,7 +159,6 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 		if task.parentId and task.parentId > 0 then
 			parent = instances[task.parentId]
 		end
-		print("DEBUG parenting child:", task.child.Name, "to parent:", parent and parent.Name, "parentId:", task.parentId)
 		task.child.Parent = parent
 	end
 
