@@ -84,6 +84,28 @@ local function sizeAllNonDefault(codec: any, allValues: { any }): number
 	return size
 end
 
+-- Cost of encoding=2 (Dictionary): bitmask + uniqueCount varint + unique values + per-instance dict indices.
+local function sizeDictionary(codec: any, uniqueValues: { any }, dictIndices: { number }?): number
+	local size = 0
+	-- bitmask for all non-default instances
+	if dictIndices then
+		size += math.ceil(#dictIndices / 8)
+	end
+	-- uniqueCount varint
+	size += varintSize(#uniqueValues)
+	-- each unique value encoded
+	for _, v in uniqueValues do
+		size += getValueSize(codec, v)
+	end
+	-- each dictIndex as varint
+	if dictIndices then
+		for _, idx in dictIndices do
+			size += varintSize(idx)
+		end
+	end
+	return size
+end
+
 return {
 	getValueSize = getValueSize,
 	varintSize = varintSize,
@@ -92,4 +114,5 @@ return {
 	sizeRaw = sizeRaw,
 	sizeRle = sizeRle,
 	sizeAllNonDefault = sizeAllNonDefault,
+	sizeDictionary = sizeDictionary,
 }

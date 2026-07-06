@@ -17,6 +17,8 @@ local function columnCost(col: PropertyColumn, effectiveCount: number, codec: an
 		return 0
 	elseif col.encoding == 4 then -- AllNonDefault
 		return CostEstimator.sizeAllNonDefault(codec, col.values)
+	elseif col.encoding == 2 then -- Dictionary
+		return CostEstimator.sizeDictionary(codec, col.values, col.dictIndices)
 	elseif col.encoding == 1 then -- RLE
 		local nonDefaultValues = {}
 		for _, v in col.values do
