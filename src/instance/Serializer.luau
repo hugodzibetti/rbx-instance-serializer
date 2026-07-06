@@ -40,7 +40,10 @@ local function collectAll(roots: { any }): { any }
 	return list
 end
 
-local function serialize(roots: { any }, artifact: ArtifactData): buffer
+-- disableDedup: for benchmarking only (bench/DedupVsDictionary.luau) — forces
+-- whole-instance dedup off so real dedup-on vs dedup-off byte counts can be
+-- compared with Dictionary encoding held constant. Not part of the public API.
+local function serialize(roots: { any }, artifact: ArtifactData, disableDedup: boolean?): buffer
 	local list = collectAll(roots)
 
 	-- Bucket by ClassName
@@ -133,8 +136,14 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 		-- Template detection: whole-instance dedup within this class bucket.
 		-- Skipped for buckets with a Referent property, since duplicate instances
 		-- can't safely share reference-target semantics.
+		--
+		-- This coexists with column Dictionary encoding (encoding == 2) rather than
+		-- being superseded by it: bench/DedupVsDictionary.luau does a real on/off
+		-- byte-count comparison (dedup+Dictionary vs Dictionary-only) on a mixed
+		-- fixture; see that benchmark's output / CLAUDE.md "Current Work" for the
+		-- measured numbers before assuming either mechanism is safe to drop.
 		local templateRefs: { number }? = nil
-		if not hasReferent and numBucket >= 2 and #propsWithCodec > 0 then
+		if not disableDedup and not hasReferent and numBucket >= 2 and #propsWithCodec > 0 then
 			-- ponytail: O(n^2) dedup scan per class bucket, upgrade: hash canonical value tuples if profiling shows buckets are large
 			local refs = table.create(numBucket, 0)
 			for i = 1, numBucket do
@@ -226,6 +235,45 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 					colValues = nonDefaultValues
 				end
 
+				-- Dictionary cost: unique values (first-occurrence order) + per-instance index.
+				-- Keyed by the value's actual serialized bytes (via the column's own codec),
+				-- not tostring(v): tostring truncates float precision for Vector3/CFrame/etc,
+				-- so numerically distinct values can print identically and get wrongly
+				-- collapsed into one dictionary entry (silent data corruption on read-back).
+				-- Serialized bytes are exactly what will be written to the wire, so this
+				-- keying is collision-safe by construction.
+				local uniqueValues = {}
+				local dictIndexOf = {}
+				local dictIndices = table.create(nonDefaultCount)
+				for _, v in nonDefaultValues do
+					local keyW = BufferWriter.new()
+					codec.write(keyW, v)
+					local key = buffer.tostring(keyW:toBuffer())
+					local idx = dictIndexOf[key]
+					if not idx then
+						table.insert(uniqueValues, v)
+						idx = #uniqueValues - 1 -- 0-based
+						dictIndexOf[key] = idx
+					end
+					table.insert(dictIndices, idx)
+				end
+
+				local sizeDict = math.ceil(effectiveCount / 8) + CostEstimator.varintSize(#uniqueValues)
+				for _, v in uniqueValues do
+					sizeDict += CostEstimator.getValueSize(codec, v)
+				end
+				for _, idx in dictIndices do
+					sizeDict += CostEstimator.varintSize(idx)
+				end
+
+				local dictIndicesResult: { number }? = nil
+				if sizeDict < minSize then
+					minSize = sizeDict
+					encoding = 2
+					colValues = uniqueValues
+					dictIndicesResult = dictIndices
+				end
+
 				-- AllNonDefault cost
 				if nonDefaultCount == effectiveCount then
 					local allNonDefaultCost = CostEstimator.sizeAllNonDefault(codec, allValues)
@@ -234,8 +282,18 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 						encoding = 4
 						colValues = allValues
 						bitmask = table.create(effectiveCount, true)
+						dictIndicesResult = nil
 					end
 				end
+
+				table.insert(columns, {
+					propertyNameIndex = getStringIndex(pm.name),
+					encoding = encoding,
+					bitmask = bitmask,
+					values = colValues,
+					dictIndices = dictIndicesResult,
+				})
+				continue
 			end
 
 			table.insert(columns, {

@@ -143,6 +143,17 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 						w:varint(run.count)
 						codec.write(w, run.value)
 					end
+				elseif col.encoding == 2 then
+					-- Dictionary: unique values (first-occurrence order), then per-instance index
+					w:varint(#col.values)
+					for _, val in col.values do
+						codec.write(w, val)
+					end
+					local dictIndices = col.dictIndices
+					assert(dictIndices, "Dictionary-encoded column missing dictIndices")
+					for _, idx in dictIndices do
+						w:varint(idx)
+					end
 				end
 			end
 		end
