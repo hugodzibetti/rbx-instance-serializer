@@ -161,4 +161,5 @@ end
 
 return {
 	readV4Body = readV4Body,
+	readClassBlockBody = readClassBlockBody,
 }

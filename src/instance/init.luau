@@ -6,4 +6,5 @@ return {
 	serialize = Serializer.serialize,
 	serializeParallel = Serializer.serializeParallel,
 	deserialize = Deserializer.deserialize,
+	deserializeParallel = Deserializer.deserializeParallel,
 }

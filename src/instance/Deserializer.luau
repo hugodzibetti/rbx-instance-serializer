@@ -3,10 +3,14 @@
 --!optimize 2
 
 local roblox = require("@lune/roblox")
+local process = require("@lune/process")
+local task = require("@lune/task")
 local Types = require("@src/types")
 local ArtifactTypes = require("@src/artifacts/types")
 local FormatTypes = require("@src/format/types")
 local FormatReader = require("@src/format/Reader")
+local BufferReader = require("@src/buffer/Reader")
+local BufferWriter = require("@src/buffer/Writer")
 
 type ArtifactData = ArtifactTypes.ArtifactData
 type FormatData = FormatTypes.FormatData
@@ -36,9 +40,12 @@ local function fromValue(enumObj: any, val: number): any?
 	return nil
 end
 
-local function deserialize(buf: buffer, artifact: ArtifactData): { any }
-	local formatData = FormatReader.read(buf, artifact)
-
+-- Stage C (sequential, parent-only): builds real Instances from an already-parsed
+-- FormatData. Shared by the sequential deserialize() and the parallel
+-- deserializeParallel() (which only differs in how it produces the FormatData -
+-- via workers instead of an in-process parse) so this construction logic is defined
+-- exactly once.
+local function buildInstancesFromFormatData(formatData: FormatData, artifact: ArtifactData): { any }
 	local instances = {}
 
 	-- Pass 1: Instantiation
@@ -215,6 +222,213 @@ local function deserialize(buf: buffer, artifact: ArtifactData): { any }
 	return roots
 end
 
+local function deserialize(buf: buffer, artifact: ArtifactData): { any }
+	local formatData = FormatReader.read(buf, artifact)
+	return buildInstancesFromFormatData(formatData, artifact)
+end
+
+-- Parses the v4 header + string table only (via FormatReader's magic/version check
+-- plus a slice of V4's block-length-prefix logic), slices each class block's raw
+-- bytes directly out of `data` (no full parse - that's the point of the v4 length
+-- prefix), and hands each slice to its own `lune run src/parallel/Worker.luau --
+-- decode` child process to parse into typed PropertyColumns. Stage C (instance
+-- construction) then runs sequentially in the parent via the same
+-- buildInstancesFromFormatData used by deserialize().
+--
+-- Only supports v4 input (parallel encoding always writes v4; this is not a
+-- general-purpose replacement for the sequential/versioned deserialize() path).
+local function deserializeParallel(data: buffer, artifact: ArtifactData): { any }
+	local r = BufferReader.new(data)
+
+	local m0 = r:u8()
+	local m1 = r:u8()
+	local m2 = r:u8()
+	local m3 = r:u8()
+	assert(m0 == 0x4C and m1 == 0x41 and m2 == 0x54 and m3 == 0x46, "Invalid format magic bytes")
+
+	local version = r:u16()
+	assert(version == 4, "deserializeParallel only supports format v4, got version " .. tostring(version))
+
+	local stringTableCount = r:varint()
+	local stringTable = table.create(stringTableCount)
+	for i = 1, stringTableCount do
+		stringTable[i] = r:string()
+	end
+
+	local classBlockCount = r:varint()
+
+	-- Peek each block's classId (first varint of the block body) and byte range
+	-- without parsing the rest of the block, so we know which artifact class
+	-- metadata to ship to each worker.
+	type BlockSlice = { classId: number, bodyStart: number, bodyLength: number }
+	local slices: { BlockSlice } = table.create(classBlockCount)
+
+	for _ = 1, classBlockCount do
+		local blockLength = r:varint()
+		local bodyStart = r:pos()
+
+		-- Peek the block body's leading classId varint via a throwaway reader over
+		-- just this block's bytes, so the main reader `r` only ever advances
+		-- forward by whole blocks (no rewinding its own position).
+		local bodyBuf = buffer.create(blockLength)
+		buffer.copy(bodyBuf, 0, data, bodyStart, blockLength)
+		local peekReader = BufferReader.new(bodyBuf)
+		local classId = peekReader:varint()
+
+		table.insert(slices, { classId = classId, bodyStart = bodyStart, bodyLength = blockLength })
+
+		-- Advance the main reader past this block's body (skip contents; workers
+		-- will parse them independently from the sliced bytes).
+		r:bytes(blockLength)
+	end
+
+	local n = #slices
+	local decodedColumns: { any } = table.create(n)
+	local errors: { string? } = table.create(n)
+
+	for idx, slice in slices do
+		local classMeta = artifact.classById[slice.classId]
+		assert(classMeta, "Class metadata not found in artifact for class ID: " .. tostring(slice.classId))
+
+		local payloadWriter = BufferWriter.new()
+		payloadWriter:varint(slice.classId)
+		payloadWriter:string(classMeta.name)
+		payloadWriter:varint(#classMeta.properties)
+		for _, pm in classMeta.properties do
+			payloadWriter:string(pm.name)
+			payloadWriter:varint(pm.codecId)
+		end
+
+		payloadWriter:varint(#stringTable)
+		for _, str in stringTable do
+			payloadWriter:string(str)
+		end
+
+		payloadWriter:varint(slice.bodyLength)
+		local bodyBuf = buffer.create(slice.bodyLength)
+		buffer.copy(bodyBuf, 0, data, slice.bodyStart, slice.bodyLength)
+		payloadWriter:bytes(bodyBuf)
+
+		local payloadStr = payloadWriter:toString()
+
+		task.spawn(function()
+			local result = process.exec("lune", { "run", "src/parallel/Worker.luau", "--", "decode" }, {
+				stdio = { stdin = payloadStr },
+			})
+			if result.ok then
+				decodedColumns[idx] = result.stdout
+			else
+				errors[idx] = string.format(
+					"parallel decode failed for class %s: %s",
+					classMeta.name,
+					if result.stderr ~= "" then result.stderr else "exited with code " .. tostring(result.code)
+				)
+			end
+		end)
+	end
+
+	local remaining = n
+	while remaining > 0 do
+		remaining = 0
+		for idx = 1, n do
+			if decodedColumns[idx] == nil and errors[idx] == nil then
+				remaining += 1
+			end
+		end
+		if remaining > 0 then
+			task.wait(0.01)
+		end
+	end
+
+	for idx = 1, n do
+		if errors[idx] then
+			error(errors[idx])
+		end
+	end
+
+	-- Decode each worker's stdout back into PropertyColumns.
+	local classBlocks: { FormatTypes.ClassBlock } = table.create(n)
+	for idx, slice in slices do
+		local classMeta = artifact.classById[slice.classId]
+		local out = buffer.fromstring(decodedColumns[idx] :: string)
+		local or_ = BufferReader.new(out)
+
+		local instanceCount = or_:varint()
+		local columnCount = or_:varint()
+		local columns = table.create(columnCount)
+
+		for i = 1, columnCount do
+			local propertyNameIndex = or_:varint()
+			local encoding = or_:varint()
+
+			local numBytes = math.ceil(instanceCount / 8)
+			local maskBytes = if numBytes > 0 then or_:bytes(numBytes) else buffer.create(0)
+			local bitmask = table.create(instanceCount)
+			local k = 1
+			for byteIdx = 0, numBytes - 1 do
+				local byteVal = buffer.readu8(maskBytes, byteIdx)
+				local limit = math.min(8, instanceCount - k + 1)
+				for bitIdx = 0, limit - 1 do
+					bitmask[k] = bit32.band(byteVal, bit32.lshift(1, bitIdx)) ~= 0
+					k += 1
+				end
+			end
+
+			local propName = stringTable[propertyNameIndex]
+			assert(propName, "Property name index out of bounds in string table")
+			local pm = nil
+			for _, p in classMeta.properties do
+				if p.name == propName then
+					pm = p
+					break
+				end
+			end
+			assert(pm, "Property metadata not found for property: " .. propName)
+			local codec = pm.codec
+
+			local valueCount = or_:varint()
+			local values = table.create(valueCount)
+			for j = 1, valueCount do
+				values[j] = codec.read(or_)
+			end
+
+			local hasDictIndices = or_:u8()
+			local dictIndices: { number }? = nil
+			if hasDictIndices == 1 then
+				local dictIndexCount = or_:varint()
+				local indices = table.create(dictIndexCount)
+				for j = 1, dictIndexCount do
+					indices[j] = or_:varint()
+				end
+				dictIndices = indices
+			end
+
+			columns[i] = {
+				propertyNameIndex = propertyNameIndex,
+				encoding = encoding,
+				bitmask = bitmask,
+				values = values,
+				dictIndices = dictIndices,
+			}
+		end
+
+		classBlocks[idx] = {
+			classId = slice.classId,
+			instanceCount = instanceCount,
+			columns = columns,
+		}
+	end
+
+	local formatData: FormatTypes.FormatData = {
+		version = 4,
+		stringTable = stringTable,
+		classBlocks = classBlocks,
+	}
+
+	return buildInstancesFromFormatData(formatData, artifact)
+end
+
 return {
 	deserialize = deserialize,
+	deserializeParallel = deserializeParallel,
 }
