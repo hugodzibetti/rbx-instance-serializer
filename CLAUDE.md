@@ -111,7 +111,8 @@ Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. Thi
 2. ✅ **Format/Container** — `src/format/` implements header, string table, columnar class blocks with 4 encodings (raw, RLE, AllDefault, AllNonDefault).
 3. ✅ **Instance layer** — `src/instance/` serializes/deserializes Roblox instances with default elision, instance dedup, and template detection.
 4. ✅ **Compat system** — `src/compat/` provides versioned schema registry with migration hooks.
-5. ✅ **Integration** — all 20 test specs wired; central serde registry at `src/serde/init.luau` (27 codecs + factories).
+5. ✅ **Integration** — all 20 test specs wired; central serde registry at `src/serde/init.luau` (28 codecs + factories).
+6. ✅ **Extended Codec Coverage** — `ProtectedString`/`ContentId` aliased to the `string` codec; new `src/serde/ray.luau` codec (id 27) for `RayValue.Value`. Artifact-build warning count dropped from 971 to 878 (remaining 878 are all out of scope: 866 `SecurityCapabilities` blocked upstream by Lune, 5 `QDir`/3 `QFont`/1 `AuroraScript` Studio-editor-only/internal, 3 `DateTime` skipped as optional stretch).
 
 ## Current Work
 
@@ -125,6 +126,7 @@ Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. Thi
 - **pesde**: Luau package manager; replaces wally for this project.
 - **lune**: Lua/Luau runtime; runs tests and build scripts outside of Roblox Studio.
 - **darklua**: AST processor; converts Luau `@alias/...` requires to relative paths for Roblox deployment. Config at `.darklua.json` (PR #17).
+- **`SecurityCapabilities` cannot be serialized**: Lune's `roblox` binding errors (`Failed to convert from 'SecurityCapabilities' into 'userdata' - Type not supported`) just reading `Instance.Capabilities` — this is 866 of the remaining codec-coverage warnings from a real artifact build, all from one property inherited by every class. Not fixable in this repo; it's an upstream Lune limitation. See `docs/superpowers/specs/2026-07-05-extended-codec-coverage-design.md`.
 
 ## Updating This File
 

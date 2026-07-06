@@ -20,6 +20,7 @@ test = "scripts/RunTests.luau"
 artifact = "src/artifacts/build/Run.luau"
 roundtrip = "scripts/RoundTrip.luau"
 bench-pipeline = "bench/RunPipeline.luau"
+build-package = "scripts/BuildPackage.luau"
 
 [dependencies]
 

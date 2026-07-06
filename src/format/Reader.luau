@@ -98,14 +98,17 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 				local numBytes = math.ceil(effectiveCount / 8)
 				local maskBytes = r:bytes(numBytes)
 				local nonDefaultCount = 0
-				for k = 1, effectiveCount do
-					local byteIdx = math.floor((k - 1) / 8)
-					local bitIdx = (k - 1) % 8
+				local k = 1
+				for byteIdx = 0, numBytes - 1 do
 					local byteVal = buffer.readu8(maskBytes, byteIdx)
-					local isNonDefault = bit32.band(byteVal, bit32.lshift(1, bitIdx)) ~= 0
-					bitmask[k] = isNonDefault
-					if isNonDefault then
-						nonDefaultCount += 1
+					local limit = math.min(8, effectiveCount - k + 1)
+					for bitIdx = 0, limit - 1 do
+						local isNonDefault = bit32.band(byteVal, bit32.lshift(1, bitIdx)) ~= 0
+						bitmask[k] = isNonDefault
+						if isNonDefault then
+							nonDefaultCount += 1
+						end
+						k += 1
 					end
 				end
 

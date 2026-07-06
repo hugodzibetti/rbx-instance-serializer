@@ -6,3 +6,4 @@ sourcemap.json
 bench/fixtures/large-samples.luau
 data/artifact.bin
 .vscode/
+dist/
