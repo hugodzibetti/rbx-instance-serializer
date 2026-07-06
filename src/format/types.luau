@@ -20,7 +20,7 @@ export type ClassBlock = {
 	classId: number,
 	instanceCount: number,
 	columns: { PropertyColumn },
-	templateRefs: { number }?, -- whole-instance dedup: 1-based per-instance ref (0 = not a duplicate), parallel to instanceCount
+	templateRefs: { number }?, -- backward-compat only: populated when reading v1/v2 files with whole-instance dedup. Never set by v3+ serialization.
 }
 
 export type FormatData = {

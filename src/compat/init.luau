@@ -6,12 +6,15 @@ export type Migration = Types.Migration
 export type CompatRegistry = Types.CompatRegistry
 
 local defaultRegistry: CompatRegistry = {
-	currentVersion = 2, -- keep in lockstep with src/format/Writer.luau's version constant
+	currentVersion = 3, -- keep in lockstep with src/format/Writer.luau's version constant
 	migrations = {
 		-- v1 -> v2: pure wire-format change (templateRefs raw varints -> RLE),
 		-- fully resolved by src/format/readers/V1.luau vs V2.luau producing the
 		-- same FormatData shape. No semantic transformation needed.
 		[1] = function(data) return data end,
+		-- v2 -> v3: removed templateRefs entirely. FormatData shape unchanged
+		-- (templateRefs field no longer present in ClassBlock).
+		[2] = function(data) return data end,
 	},
 }
 

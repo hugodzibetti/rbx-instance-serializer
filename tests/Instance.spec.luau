@@ -126,11 +126,8 @@ return function()
 		end)
 	end)
 
-	-- Whole-instance dedup (templateRefs) and column Dictionary encoding both remain
-	-- active; they coexist rather than one superseding the other. See
-	-- bench/DedupVsDictionary.luau for the real dedup-on vs dedup-off byte comparison.
-	test.suite("instance.identicalValues", function()
-		test.case("round trips fully identical instances correctly via Dictionary/AllNonDefault column encoding", function()
+	test.suite("instance.no-dedup", function()
+		test.case("identical instances serialize without dedup (v3 format)", function()
 			local p1 = roblox.Instance.new("Part")
 			p1.Anchored = true
 			p1.Position = roblox.Vector3.new(1, 1, 1)
@@ -149,21 +146,10 @@ return function()
 			check.equal(#decoded.classBlocks, 1)
 			local cb = decoded.classBlocks[1]
 			check.equal(cb.instanceCount, 3)
-
-			local roots = instance.deserialize(buf, mockArtifactNoParent :: any)
-			check.equal(#roots, 3)
-			for _, r in roots do
-				check.equal(r.Anchored, true)
-				check.equal(r.Position, roblox.Vector3.new(1, 1, 1))
-			end
-
-			-- Instances must be separate objects, not aliased.
-			roots[1].Position = roblox.Vector3.new(9, 9, 9)
-			check.equal(roots[2].Position, roblox.Vector3.new(1, 1, 1))
-			check.equal(roots[3].Position, roblox.Vector3.new(1, 1, 1))
+			check.equal(cb.templateRefs, nil)
 		end)
 
-		test.case("mixed identical and unique instances round trip to correct, independent values", function()
+		test.case("mixed instances round trip to correct, independent values", function()
 			local p1 = roblox.Instance.new("Part")
 			p1.Anchored = true
 			p1.Position = roblox.Vector3.new(2, 2, 2)

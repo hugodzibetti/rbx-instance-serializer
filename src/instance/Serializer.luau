@@ -40,10 +40,7 @@ local function collectAll(roots: { any }): { any }
 	return list
 end
 
--- disableDedup: for benchmarking only (bench/DedupVsDictionary.luau) — forces
--- whole-instance dedup off so real dedup-on vs dedup-off byte counts can be
--- compared with Dictionary encoding held constant. Not part of the public API.
-local function serialize(roots: { any }, artifact: ArtifactData, disableDedup: boolean?): buffer
+local function serialize(roots: { any }, artifact: ArtifactData): buffer
 	local list = collectAll(roots)
 
 	-- Bucket by ClassName
@@ -133,89 +130,7 @@ local function serialize(roots: { any }, artifact: ArtifactData, disableDedup: b
 			isDefaultByProp[pIdx] = isDefaults
 		end
 
-		-- Template detection: whole-instance dedup within this class bucket.
-		-- Skipped for buckets with a Referent property, since duplicate instances
-		-- can't safely share reference-target semantics.
-		--
-		-- This coexists with column Dictionary encoding (encoding == 2) rather than
-		-- being superseded by it: bench/DedupVsDictionary.luau does a real on/off
-		-- byte-count comparison (dedup+Dictionary vs Dictionary-only) on a mixed
-		-- fixture; see that benchmark's output / CLAUDE.md "Current Work" for the
-		-- measured numbers before assuming either mechanism is safe to drop.
-		local templateRefs: { number }? = nil
-		if not disableDedup and not hasReferent and numBucket >= 2 and #propsWithCodec > 0 then
-			-- Hash-based dedup scan: O(n) canonical value tuple lookup instead of O(n^2) pairwise
-			-- comparison. Computes a hash key from all property values, then uses hash table
-			-- to find first occurrence of each unique value tuple. Handles hash collisions with
-			-- full property-tuple comparison to ensure correctness.
-			local refs = table.create(numBucket, 0)
-			local hashToTemplate: { [string]: number } = {}
-
-			-- Helper: compute canonical hash key for instance i
-			local function getCanonicalKey(instanceIdx: number): string
-				local parts = {}
-				for pIdx = 1, #propsWithCodec do
-					local val = serializedByProp[pIdx][instanceIdx]
-					-- Convert each serialized value to a string part
-					-- Use tostring on the serialized value (not the original)
-					table.insert(parts, tostring(val))
-				end
-				return table.concat(parts, "|")
-			end
-
-			-- Helper: check if two instances have identical property tuples
-			local function instancesEqual(idx1: number, idx2: number): boolean
-				for pIdx = 1, #propsWithCodec do
-					if serializedByProp[pIdx][idx1] ~= serializedByProp[pIdx][idx2] then
-						return false
-					end
-				end
-				return true
-			end
-
-			-- Single pass: compute hash for each instance, store first occurrence
-			for i = 1, numBucket do
-				local key = getCanonicalKey(i)
-				local existingTemplate = hashToTemplate[key]
-
-				if existingTemplate then
-					-- Hash collision or actual duplicate: verify with full comparison
-					if instancesEqual(i, existingTemplate) then
-						-- Actual duplicate, mark as copy of template
-						refs[i] = existingTemplate
-					end
-					-- else: hash collision but different values, treat as unique (refs[i] stays 0)
-				else
-					-- First occurrence of this hash, mark as template
-					hashToTemplate[key] = i
-				end
-			end
-
-			local anyDup = false
-			for i = 1, numBucket do
-				if refs[i] ~= 0 then
-					anyDup = true
-					break
-				end
-			end
-
-			if anyDup then
-				templateRefs = refs
-			end
-		end
-
-		local effectiveIndices: { number }? = nil
 		local effectiveCount = numBucket
-		if templateRefs then
-			local indices = {}
-			for i = 1, numBucket do
-				if templateRefs[i] == 0 then
-					table.insert(indices, i)
-				end
-			end
-			effectiveIndices = indices
-			effectiveCount = #indices
-		end
 
 		local columns: { PropertyColumn } = {}
 
@@ -230,13 +145,12 @@ local function serialize(roots: { any }, artifact: ArtifactData, disableDedup: b
 			local nonDefaultValues = {}
 			local nonDefaultCount = 0
 
-			for k = 1, effectiveCount do
-				local i = if effectiveIndices then effectiveIndices[k] else k
+			for i = 1, effectiveCount do
 				local serializedVal = serializedVals[i]
 				local isDefault = isDefaults[i]
 
-				allValues[k] = serializedVal
-				bitmask[k] = not isDefault
+				allValues[i] = serializedVal
+				bitmask[i] = not isDefault
 
 				if not isDefault then
 					table.insert(nonDefaultValues, serializedVal)
@@ -334,12 +248,11 @@ local function serialize(roots: { any }, artifact: ArtifactData, disableDedup: b
 			classId = classMeta.id,
 			instanceCount = numBucket,
 			columns = columns,
-			templateRefs = templateRefs,
 		})
 	end
 
 	local formatData: FormatData = {
-		version = 2,
+		version = 3,
 		stringTable = stringTable,
 		classBlocks = classBlocks,
 	}

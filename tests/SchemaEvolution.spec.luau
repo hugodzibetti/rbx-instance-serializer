@@ -68,20 +68,19 @@ return function()
 			check.equal(col.values[3], roblox.Vector3.new(4, 5, 6))
 		end)
 
-		test.case("writes version 2 and round-trips with templateRefs RLE layout", function()
+		test.case("writes version 3 (no templateRefs) and round-trips correctly", function()
 			local data: format.FormatData = {
-				version = 2,
+				version = 3,
 				stringTable = { "Anchored", "Position" },
 				classBlocks = {
 					{
 						classId = 1,
-						instanceCount = 6,
-						templateRefs = { 0, 0, 1, 1, 1, 2 },
+						instanceCount = 3,
 						columns = {
 							{
 								propertyNameIndex = 2,
 								encoding = 1,
-								bitmask = { true, true, false, true, true, false },
+								bitmask = { true, true, true },
 								values = {
 									roblox.Vector3.new(1, 2, 3),
 									roblox.Vector3.new(1, 2, 3),
@@ -95,23 +94,17 @@ return function()
 
 			local buf = format.write(data, mockArtifact :: any)
 
-			-- Confirm the header reports version 2.
+			-- Confirm the header reports version 3.
 			local versionByte = buffer.readu8(buf, 4)
 			local versionByte2 = buffer.readu8(buf, 5)
-			check.equal(versionByte, 2)
+			check.equal(versionByte, 3)
 			check.equal(versionByte2, 0)
 
 			local decoded = format.read(buf, mockArtifact :: any)
-			check.equal(decoded.version, 2)
+			check.equal(decoded.version, 3)
 
 			local block = decoded.classBlocks[1]
-			local refs = block.templateRefs :: { number }
-			check.equal(refs[1], 0)
-			check.equal(refs[2], 0)
-			check.equal(refs[3], 1)
-			check.equal(refs[4], 1)
-			check.equal(refs[5], 1)
-			check.equal(refs[6], 2)
+			check.equal(block.templateRefs, nil)
 
 			local col = block.columns[1]
 			check.equal(#col.values, 3)
