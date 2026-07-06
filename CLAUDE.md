@@ -65,8 +65,8 @@ lune run tests/_scratch_run.luau  # see tests/*.spec.luau for pattern
 
 **Running**:
 
-- `pesde run test` loads all 20 test specs and runs them via frktest's lune reporter.
-- All specs wired into `scripts/RunTests.luau`: Buffer, Serde (11 types + Referent), Artifact, Format, Instance, Compat.
+- `pesde run test` loads all 21 test specs and runs them via frktest's lune reporter.
+- All specs wired into `scripts/RunTests.luau`: Buffer, Serde (11 types + Referent), Artifact, Format, Instance, Compat, Cli.
 
 ## Require Aliases
 
@@ -76,11 +76,12 @@ Defined in `.luaurc`:
 "aliases": {
   "src": "src",
   "packages": "lune_packages",
-  "tests": "tests"
+  "tests": "tests",
+  "cli": "cli"
 }
 ```
 
-Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. This works natively under Lune; publishing to Roblox uses darklua to convert `@src/...` to relative paths.
+Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName`, `@cli/SomeName` everywhere. This works natively under Lune; publishing to Roblox uses darklua to convert `@src/...` to relative paths (the `cli/` tree is dev tooling only, not part of the published Roblox package).
 
 ## Code Style
 
@@ -111,8 +112,10 @@ Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. Thi
 2. ✅ **Format/Container** — `src/format/` implements header, string table, columnar class blocks with 5 encodings (raw, RLE, Dictionary, AllDefault, AllNonDefault).
 3. ✅ **Instance layer** — `src/instance/` serializes/deserializes Roblox instances with default elision, instance dedup (`templateRefs`), and template detection. Dedup coexists with column Dictionary encoding rather than being superseded by it — see "Column Dictionary Encoding" below for the real measurement behind that call.
 4. ✅ **Compat system** — `src/compat/` provides versioned schema registry with migration hooks.
-5. ✅ **Integration** — all test specs wired; central serde registry at `src/serde/init.luau` (27 codecs + factories).
-6. ✅ **Column Dictionary Encoding** — added a 5th column encoding (id `2`) that captures repeated-but-shuffled values RLE misses. Wired into the cost-picker (`src/instance/Serializer.luau`, which keys unique dictionary values by their actual codec-serialized bytes — not `tostring(v)`, which can lose precision for Vector3/CFrame/etc and silently collapse distinct values) and read/write (`src/format/Writer.luau`/`Reader.luau`). `bench/DedupVsDictionary.luau` does a real dedup-on vs dedup-off byte-count comparison — it calls the actual `Lattice.serialize` entrypoint twice on the same mixed fixture (40 identical / 200 shared-palette / 60 unique instances) via a benchmark-only `disableDedup` parameter on `Serializer.serialize`, with Dictionary encoding active in both runs. Measured: dedup contributed 0 additional bytes of savings on this fixture (Dictionary's per-column dictionary already collapses the fully-identical block to a 1-entry dictionary, which is dedup's best case). Given that real result, whole-instance dedup (`templateRefs`) was **kept** rather than removed — the O(n²) scan only runs when there's no Referent property and ≥2 instances, and the measured overhead on this fixture was negligible relative to overall serialize cost; removal is left for a follow-up decision once dedup is measured across more realistic/larger fixtures where its cost profile may differ. Both mechanisms are wired end-to-end through `Serializer.luau`, `Deserializer.luau`, `Writer.luau`, `Reader.luau`, and `format/types.luau`.
+5. ✅ **Integration** — all 20 test specs wired; central serde registry at `src/serde/init.luau` (28 codecs + factories).
+6. ✅ **Extended Codec Coverage** — `ProtectedString`/`ContentId` aliased to the `string` codec; new `src/serde/ray.luau` codec (id 27) for `RayValue.Value`. Artifact-build warning count dropped from 971 to 878 (remaining 878 are all out of scope: 866 `SecurityCapabilities` blocked upstream by Lune, 5 `QDir`/3 `QFont`/1 `AuroraScript` Studio-editor-only/internal, 3 `DateTime` skipped as optional stretch).
+7. ✅ **CLI Tooling** — `cli/` implements `lattice stats/dump/diff` per `docs/superpowers/specs/2026-07-05-cli-tooling-design.md`; wired as `pesde run lattice -- <subcommand> <args>`. `stats`/`dump` read `FormatData` directly (no instance deserialize); `diff` resolves both files via `src/instance/Deserializer.luau` and matches instances by `UniqueId` with positional-tree-order fallback, printing which strategy matched each instance.
+8. ✅ **Column Dictionary Encoding** — added a 5th column encoding (id `2`) that captures repeated-but-shuffled values RLE misses. Wired into the cost-picker (`src/instance/Serializer.luau`, which keys unique dictionary values by their actual codec-serialized bytes — not `tostring(v)`, which can lose precision for Vector3/CFrame/etc and silently collapse distinct values) and read/write (`src/format/Writer.luau`/`Reader.luau`, plus the version-2 reader `src/format/readers/V2.luau`). `bench/DedupVsDictionary.luau` does a real dedup-on vs dedup-off byte-count comparison — it calls the actual `Lattice.serialize` entrypoint twice on the same mixed fixture (40 identical / 200 shared-palette / 60 unique instances) via a benchmark-only `disableDedup` parameter on `Serializer.serialize`, with Dictionary encoding active in both runs. Measured: dedup contributed 0 additional bytes of savings on this fixture (Dictionary's per-column dictionary already collapses the fully-identical block to a 1-entry dictionary, which is dedup's best case). Given that real result, whole-instance dedup (`templateRefs`) was **kept** rather than removed — the O(n²) scan only runs when there's no Referent property and ≥2 instances, and the measured overhead on this fixture was negligible relative to overall serialize cost; removal is left for a follow-up decision once dedup is measured across more realistic/larger fixtures where its cost profile may differ. Both mechanisms are wired end-to-end through `Serializer.luau`, `Deserializer.luau`, `Writer.luau`, `Reader.luau`, and `format/types.luau`.
 
 ## Current Work
 
@@ -126,6 +129,9 @@ Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. Thi
 - **pesde**: Luau package manager; replaces wally for this project.
 - **lune**: Lua/Luau runtime; runs tests and build scripts outside of Roblox Studio.
 - **darklua**: AST processor; converts Luau `@alias/...` requires to relative paths for Roblox deployment. Config at `.darklua.json` (PR #17).
+- **`SecurityCapabilities` cannot be serialized**: Lune's `roblox` binding errors (`Failed to convert from 'SecurityCapabilities' into 'userdata' - Type not supported`) just reading `Instance.Capabilities` — this is 866 of the remaining codec-coverage warnings from a real artifact build, all from one property inherited by every class. Not fixable in this repo; it's an upstream Lune limitation. See `docs/superpowers/specs/2026-07-05-extended-codec-coverage-design.md`.
+- **Shared cost-estimator module**: per-column encoding cost math (`sizeRaw`/`sizeRle`/`sizeAllNonDefault`, plus `getValueSize`/`varintSize`/`runLengthEncode`) lives in `src/format/CostEstimator.luau`, extracted out of `src/instance/Serializer.luau` (which now just calls it) so `cli/Stats.luau`/`cli/Dump.luau` recompute the exact same per-column byte costs the serializer uses to pick encodings — single source of truth, no copy-pasted estimator logic between the CLI and the serializer.
+- **`data/artifact.bin` is gitignored**: it's generated locally/CI via `pesde run artifact`. Tests that need an `ArtifactData` (Instance/Format/Cli specs) use an in-memory mock artifact table instead of depending on this file, so `pesde run test` works without a build step.
 
 ## Updating This File
 

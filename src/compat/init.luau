@@ -6,8 +6,13 @@ export type Migration = Types.Migration
 export type CompatRegistry = Types.CompatRegistry
 
 local defaultRegistry: CompatRegistry = {
-	currentVersion = 1, -- keep in lockstep with src/format/Writer.luau's version constant
-	migrations = {},
+	currentVersion = 2, -- keep in lockstep with src/format/Writer.luau's version constant
+	migrations = {
+		-- v1 -> v2: pure wire-format change (templateRefs raw varints -> RLE),
+		-- fully resolved by src/format/readers/V1.luau vs V2.luau producing the
+		-- same FormatData shape. No semantic transformation needed.
+		[1] = function(data) return data end,
+	},
 }
 
 local function migrate(registry: CompatRegistry, data: any, fromVersion: number): any

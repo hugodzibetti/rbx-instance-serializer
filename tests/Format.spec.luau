@@ -200,7 +200,7 @@ return function()
 			local pos2 = roblox.Vector3.new(4, 5, 6)
 
 			local data: format.FormatData = {
-				version = 1,
+				version = 2,
 				stringTable = { "Anchored", "Position" },
 				classBlocks = {
 					{

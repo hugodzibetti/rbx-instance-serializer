@@ -66,13 +66,18 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 		local effectiveCount = cb.instanceCount
 		if cb.templateRefs then
 			w:varint(1)
-			-- ponytail: templateRefs stored as raw varints, upgrade: RLE if profiling shows it matters
+			-- v2: templateRefs stored as RLE runs (mirrors the property column RLE below)
 			effectiveCount = 0
 			for i = 1, cb.instanceCount do
-				w:varint(cb.templateRefs[i])
 				if cb.templateRefs[i] == 0 then
 					effectiveCount += 1
 				end
+			end
+			local runs = runLengthEncode(cb.templateRefs)
+			w:varint(#runs)
+			for _, run in runs do
+				w:varint(run.count)
+				w:varint(run.value)
 			end
 		else
 			w:varint(0)

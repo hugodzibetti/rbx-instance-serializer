@@ -3,6 +3,7 @@
 	"aliases": {
 		"src": "src",
 		"packages": "lune_packages",
-		"tests": "tests"
+		"tests": "tests",
+		"cli": "cli"
 	}
 }
