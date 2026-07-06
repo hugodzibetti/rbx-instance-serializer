@@ -144,24 +144,50 @@ local function serialize(roots: { any }, artifact: ArtifactData, disableDedup: b
 		-- measured numbers before assuming either mechanism is safe to drop.
 		local templateRefs: { number }? = nil
 		if not disableDedup and not hasReferent and numBucket >= 2 and #propsWithCodec > 0 then
-			-- ponytail: O(n^2) dedup scan per class bucket, upgrade: hash canonical value tuples if profiling shows buckets are large
+			-- Hash-based dedup scan: O(n) canonical value tuple lookup instead of O(n^2) pairwise
+			-- comparison. Computes a hash key from all property values, then uses hash table
+			-- to find first occurrence of each unique value tuple. Handles hash collisions with
+			-- full property-tuple comparison to ensure correctness.
 			local refs = table.create(numBucket, 0)
-			for i = 1, numBucket do
-				if refs[i] == 0 then
-					for j = i + 1, numBucket do
-						if refs[j] == 0 then
-							local equal = true
-							for pIdx = 1, #propsWithCodec do
-								if serializedByProp[pIdx][i] ~= serializedByProp[pIdx][j] then
-									equal = false
-									break
-								end
-							end
-							if equal then
-								refs[j] = i
-							end
-						end
+			local hashToTemplate: { [string]: number } = {}
+
+			-- Helper: compute canonical hash key for instance i
+			local function getCanonicalKey(instanceIdx: number): string
+				local parts = {}
+				for pIdx = 1, #propsWithCodec do
+					local val = serializedByProp[pIdx][instanceIdx]
+					-- Convert each serialized value to a string part
+					-- Use tostring on the serialized value (not the original)
+					table.insert(parts, tostring(val))
+				end
+				return table.concat(parts, "|")
+			end
+
+			-- Helper: check if two instances have identical property tuples
+			local function instancesEqual(idx1: number, idx2: number): boolean
+				for pIdx = 1, #propsWithCodec do
+					if serializedByProp[pIdx][idx1] ~= serializedByProp[pIdx][idx2] then
+						return false
 					end
+				end
+				return true
+			end
+
+			-- Single pass: compute hash for each instance, store first occurrence
+			for i = 1, numBucket do
+				local key = getCanonicalKey(i)
+				local existingTemplate = hashToTemplate[key]
+
+				if existingTemplate then
+					-- Hash collision or actual duplicate: verify with full comparison
+					if instancesEqual(i, existingTemplate) then
+						-- Actual duplicate, mark as copy of template
+						refs[i] = existingTemplate
+					end
+					-- else: hash collision but different values, treat as unique (refs[i] stays 0)
+				else
+					-- First occurrence of this hash, mark as template
+					hashToTemplate[key] = i
 				end
 			end
 
