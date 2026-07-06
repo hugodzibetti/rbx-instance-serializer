@@ -7,9 +7,8 @@ local Types = require("@src/types")
 local ArtifactTypes = require("@src/artifacts/types")
 local FormatTypes = require("@src/format/types")
 local FormatWriter = require("@src/format/Writer")
-local BufferWriter = require("@src/buffer/Writer")
 local PropertyCompare = require("@src/instance/PropertyCompare")
-local CostEstimator = require("@src/format/CostEstimator")
+local ColumnEncoder = require("@src/instance/ColumnEncoder")
 
 type ArtifactData = ArtifactTypes.ArtifactData
 type ClassBlock = FormatTypes.ClassBlock
@@ -140,107 +139,14 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			local serializedVals = serializedByProp[pIdx]
 			local isDefaults = isDefaultByProp[pIdx]
 
-			local allValues = table.create(effectiveCount)
-			local bitmask = table.create(effectiveCount)
-			local nonDefaultValues = {}
-			local nonDefaultCount = 0
-
-			for i = 1, effectiveCount do
-				local serializedVal = serializedVals[i]
-				local isDefault = isDefaults[i]
-
-				allValues[i] = serializedVal
-				bitmask[i] = not isDefault
-
-				if not isDefault then
-					table.insert(nonDefaultValues, serializedVal)
-					nonDefaultCount += 1
-				end
-			end
-
-			local encoding = 0
-			local colValues = nonDefaultValues
-
-			if nonDefaultCount == 0 then
-				encoding = 3
-				colValues = {}
-				bitmask = table.create(effectiveCount, false)
-			else
-				local minSize = CostEstimator.sizeRaw(codec, effectiveCount, nonDefaultValues)
-
-				local rleCost = CostEstimator.sizeRle(codec, effectiveCount, nonDefaultValues)
-				if rleCost < minSize then
-					minSize = rleCost
-					encoding = 1
-					colValues = nonDefaultValues
-				end
-
-				-- Dictionary cost: unique values (first-occurrence order) + per-instance index.
-				-- Keyed by the value's actual serialized bytes (via the column's own codec),
-				-- not tostring(v): tostring truncates float precision for Vector3/CFrame/etc,
-				-- so numerically distinct values can print identically and get wrongly
-				-- collapsed into one dictionary entry (silent data corruption on read-back).
-				-- Serialized bytes are exactly what will be written to the wire, so this
-				-- keying is collision-safe by construction.
-				local uniqueValues = {}
-				local dictIndexOf = {}
-				local dictIndices = table.create(nonDefaultCount)
-				for _, v in nonDefaultValues do
-					local keyW = BufferWriter.new()
-					codec.write(keyW, v)
-					local key = buffer.tostring(keyW:toBuffer())
-					local idx = dictIndexOf[key]
-					if not idx then
-						table.insert(uniqueValues, v)
-						idx = #uniqueValues - 1 -- 0-based
-						dictIndexOf[key] = idx
-					end
-					table.insert(dictIndices, idx)
-				end
-
-				local sizeDict = math.ceil(effectiveCount / 8) + CostEstimator.varintSize(#uniqueValues)
-				for _, v in uniqueValues do
-					sizeDict += CostEstimator.getValueSize(codec, v)
-				end
-				for _, idx in dictIndices do
-					sizeDict += CostEstimator.varintSize(idx)
-				end
-
-				local dictIndicesResult: { number }? = nil
-				if sizeDict < minSize then
-					minSize = sizeDict
-					encoding = 2
-					colValues = uniqueValues
-					dictIndicesResult = dictIndices
-				end
-
-				-- AllNonDefault cost
-				if nonDefaultCount == effectiveCount then
-					local allNonDefaultCost = CostEstimator.sizeAllNonDefault(codec, allValues)
-					if allNonDefaultCost < minSize then
-						minSize = allNonDefaultCost
-						encoding = 4
-						colValues = allValues
-						bitmask = table.create(effectiveCount, true)
-						dictIndicesResult = nil
-					end
-				end
-
-				table.insert(columns, {
-					propertyNameIndex = getStringIndex(pm.name),
-					encoding = encoding,
-					bitmask = bitmask,
-					values = colValues,
-					dictIndices = dictIndicesResult,
-				})
-				continue
-			end
+			local result = ColumnEncoder.encodeColumn(codec, serializedVals, isDefaults, effectiveCount)
 
 			table.insert(columns, {
 				propertyNameIndex = getStringIndex(pm.name),
-				encoding = encoding,
-				bitmask = bitmask,
-				values = colValues,
+				encoding = result.encoding,
+				bitmask = result.bitmask,
+				values = result.values,
+				dictIndices = result.dictIndices,
 			})
 		end
 
