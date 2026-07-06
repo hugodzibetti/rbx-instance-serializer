@@ -20,13 +20,19 @@
 -- instanceCount: varint
 -- columnCount: varint
 -- for each column:
---   propertyName: string            -- sent directly (not a shared string-table index)
---                                        since the worker only ever handles one class
---                                        block and has no visibility into the parent's
---                                        global string table; the parent is responsible
---                                        for translating this back to its own
---                                        stringTable index when stitching results
---                                        together (Stage C)
+--   propertyName: string            -- sent directly so the worker can build the
+--                                        synthetic per-class property metadata
+--                                        writeClassBlock's getPropertyMetadata needs;
+--                                        NOT used as the wire propertyNameIndex (see
+--                                        below)
+--   propertyNameIndex: varint       -- the REAL global index into the parent's
+--                                        precomputed global string table (built once,
+--                                        before any worker is spawned, per "Worker
+--                                        protocol > Serialize" step 2 of the parallel-
+--                                        encoding design doc). The worker threads this
+--                                        value straight through into the PropertyColumn
+--                                        it writes - it never invents its own local
+--                                        numbering.
 --   codecId: varint                 -- looked up in serde.codecIdToModule; no artifact
 --                                        needed to resolve a codec by id
 --   bitmask: ceil(instanceCount / 8) bytes, packed LSB-first (same layout as
@@ -39,9 +45,11 @@
 -- ## Wire payload (stdout):
 --
 -- The finished, length-prefixed v4 class block bytes, exactly as produced by
--- Writer.writeClassBlock (varint byte-length prefix + block body). The parent
--- concatenates these directly into the final buffer after the header + string table,
--- in classId order (this IS the final on-disk bytes for this block, no rewriting needed).
+-- Writer.writeClassBlock (varint byte-length prefix + block body). Because the
+-- propertyNameIndex values threaded through above are the parent's REAL global string
+-- table indices (not a local per-worker counter), these bytes are directly suitable for
+-- concatenation by the parent into the final buffer after the header + string table, in
+-- classId order (this IS the final on-disk bytes for this block, no rewriting needed).
 --
 -- On any decode/encode error: writes a descriptive message to stderr and exits 1.
 
@@ -69,7 +77,6 @@ local function run()
 	-- No real artifact file is available (or needed) in a worker process.
 	local properties = table.create(columnCount)
 	local artifact = {
-		version = 0,
 		classes = {},
 		classByName = {},
 		classById = {
@@ -81,11 +88,15 @@ local function run()
 		},
 	}
 
-	local stringTable = table.create(columnCount)
+	-- Sparse: keyed by the REAL global propertyNameIndex the parent computed, not a
+	-- contiguous 1..columnCount local counter. Gaps are fine - writeClassBlock only
+	-- ever indexes it at the exact propertyNameIndex values this worker itself wrote.
+	local stringTable = {}
 	local columns = table.create(columnCount)
 
 	for i = 1, columnCount do
 		local propName = r:string()
+		local propertyNameIndex = r:varint()
 		local codecId = r:varint()
 
 		local codec = serde.codecIdToModule[codecId]
@@ -96,13 +107,12 @@ local function run()
 			codecId = codecId,
 			codec = codec,
 		}
-		stringTable[i] = propName
+		stringTable[propertyNameIndex] = propName
 
 		local numBytes = math.ceil(instanceCount / 8)
 		local maskBytes = if numBytes > 0 then r:bytes(numBytes) else buffer.create(0)
 
 		local isDefaults = table.create(instanceCount)
-		local nonDefaultCount = 0
 		local k = 1
 		for byteIdx = 0, numBytes - 1 do
 			local byteVal = buffer.readu8(maskBytes, byteIdx)
@@ -110,9 +120,6 @@ local function run()
 			for bitIdx = 0, limit - 1 do
 				local isNonDefault = bit32.band(byteVal, bit32.lshift(1, bitIdx)) ~= 0
 				isDefaults[k] = not isNonDefault
-				if isNonDefault then
-					nonDefaultCount += 1
-				end
 				k += 1
 			end
 		end
@@ -127,7 +134,7 @@ local function run()
 		local result = ColumnEncoder.encodeColumn(codec, serializedVals, isDefaults, instanceCount)
 
 		columns[i] = {
-			propertyNameIndex = i,
+			propertyNameIndex = propertyNameIndex,
 			encoding = result.encoding,
 			bitmask = result.bitmask,
 			values = result.values,
@@ -153,6 +160,6 @@ end
 
 local ok, err = pcall(run)
 if not ok then
-	stdio.ewrite("Worker error: " .. tostring(err))
+	stdio.ewrite("Worker error: " .. tostring(err) .. "\n")
 	process.exit(1)
 end

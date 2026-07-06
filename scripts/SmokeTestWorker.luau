@@ -23,6 +23,13 @@ end
 --   Transparency (f32, codecId 0): 3 instances, all default (skipped) -> AllDefault.
 local instanceCount = 3
 
+-- Fake-but-plausible GLOBAL propertyNameIndex values (as the parent would have
+-- precomputed from its own global string table before spawning this worker) - chosen
+-- to be != the old local 1,2,3 counter the worker used to invent, to prove the
+-- passthrough of the real global index actually works.
+local ANCHORED_GLOBAL_INDEX = 12
+local TRANSPARENCY_GLOBAL_INDEX = 5
+
 local payload = BufferWriter.new()
 payload:string("Part")
 payload:varint(1) -- classId
@@ -32,6 +39,7 @@ payload:varint(2) -- columnCount
 -- Column 1: Anchored (bool), bitmask = [true, false, true] -> non-default all 3
 do
 	payload:string("Anchored")
+	payload:varint(ANCHORED_GLOBAL_INDEX)
 	payload:varint(2) -- codecId for bool
 	-- bitmask: bit0=1 (nondefault), bit1=1 (nondefault), bit2=1 (nondefault)
 	-- (in this smoke test every instance is "non-default" so we exercise codec.read
@@ -47,6 +55,7 @@ end
 -- Column 2: Transparency (f32), all default -> bitmask all zero, no values
 do
 	payload:string("Transparency")
+	payload:varint(TRANSPARENCY_GLOBAL_INDEX)
 	payload:varint(0) -- codecId for f32
 	payload:u8(0) -- bitmask byte, all default
 end
@@ -77,15 +86,31 @@ end
 -- Wrap the worker's single length-prefixed class block in a minimal full v4 buffer
 -- so we can parse it back with the project's real format.read (byte-for-byte the
 -- same class-block body layout the sequential Writer.luau produces).
+--
+-- The string table here must be built so that stringTable[ANCHORED_GLOBAL_INDEX] and
+-- stringTable[TRANSPARENCY_GLOBAL_INDEX] resolve correctly, proving the worker passed
+-- the real global indices straight through rather than emitting its own local 1/2
+-- counter. format.read expects a dense 1..N array (real V4 files always have a
+-- contiguous global string table - the sparse table is only an internal worker detail),
+-- so pad the gaps with placeholder entries.
+local GLOBAL_STRING_TABLE_COUNT = math.max(ANCHORED_GLOBAL_INDEX, TRANSPARENCY_GLOBAL_INDEX)
+local globalStringTable = table.create(GLOBAL_STRING_TABLE_COUNT)
+for i = 1, GLOBAL_STRING_TABLE_COUNT do
+	globalStringTable[i] = "_unused" .. tostring(i)
+end
+globalStringTable[ANCHORED_GLOBAL_INDEX] = "Anchored"
+globalStringTable[TRANSPARENCY_GLOBAL_INDEX] = "Transparency"
+
 local wrapper = BufferWriter.new()
 wrapper:u8(0x4C)
 wrapper:u8(0x41)
 wrapper:u8(0x54)
 wrapper:u8(0x46)
 wrapper:u16(4) -- version
-wrapper:varint(2) -- string table count
-wrapper:string("Anchored")
-wrapper:string("Transparency")
+wrapper:varint(GLOBAL_STRING_TABLE_COUNT)
+for i = 1, GLOBAL_STRING_TABLE_COUNT do
+	wrapper:string(globalStringTable[i])
+end
 wrapper:varint(1) -- class block count
 wrapper:bytes(buffer.fromstring(stdoutStr))
 
@@ -127,6 +152,24 @@ end
 
 assert(anchoredCol ~= nil, "missing Anchored column")
 assert(transparencyCol ~= nil, "missing Transparency column")
+
+-- The core assertion for this bug fix: the worker must pass the REAL global
+-- propertyNameIndex straight through into the bytes it writes, not invent its own local
+-- 1/2/3 counter (which would not match either global index chosen here).
+assert(
+	anchoredCol.propertyNameIndex == ANCHORED_GLOBAL_INDEX,
+	"expected Anchored column propertyNameIndex to be the real global index "
+		.. tostring(ANCHORED_GLOBAL_INDEX)
+		.. ", got "
+		.. tostring(anchoredCol.propertyNameIndex)
+)
+assert(
+	transparencyCol.propertyNameIndex == TRANSPARENCY_GLOBAL_INDEX,
+	"expected Transparency column propertyNameIndex to be the real global index "
+		.. tostring(TRANSPARENCY_GLOBAL_INDEX)
+		.. ", got "
+		.. tostring(transparencyCol.propertyNameIndex)
+)
 
 assert(transparencyCol.encoding == 3, "expected Transparency to be AllDefault (encoding 3)")
 
