@@ -28,7 +28,7 @@ end
 local encodingNames: { [number]: string } = {
 	[0] = "Raw",
 	[1] = "RLE",
-	[2] = "Delta",
+	[2] = "Dictionary",
 	[3] = "AllDefault",
 	[4] = "AllNonDefault",
 }
