@@ -126,8 +126,8 @@ return function()
 		end)
 	end)
 
-	test.suite("instance.dedup", function()
-		test.case("collapses fully identical instances into a single template", function()
+	test.suite("instance.no-dedup", function()
+		test.case("identical instances serialize without dedup (v3 format)", function()
 			local p1 = roblox.Instance.new("Part")
 			p1.Anchored = true
 			p1.Position = roblox.Vector3.new(1, 1, 1)
@@ -146,13 +146,10 @@ return function()
 			check.equal(#decoded.classBlocks, 1)
 			local cb = decoded.classBlocks[1]
 			check.equal(cb.instanceCount, 3)
-			check.equal(cb.templateRefs ~= nil, true)
-			check.equal(cb.templateRefs[1], 0)
-			check.equal(cb.templateRefs[2], 1)
-			check.equal(cb.templateRefs[3], 1)
+			check.equal(cb.templateRefs, nil)
 		end)
 
-		test.case("mixed dedup and unique instances round trip to correct, independent values", function()
+		test.case("mixed instances round trip to correct, independent values", function()
 			local p1 = roblox.Instance.new("Part")
 			p1.Anchored = true
 			p1.Position = roblox.Vector3.new(2, 2, 2)

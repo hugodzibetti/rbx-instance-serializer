@@ -8,6 +8,8 @@ local ArtifactTypes = require("@src/artifacts/types")
 local FormatTypes = require("@src/format/types")
 local FormatWriter = require("@src/format/Writer")
 local BufferWriter = require("@src/buffer/Writer")
+local PropertyCompare = require("@src/instance/PropertyCompare")
+local CostEstimator = require("@src/format/CostEstimator")
 
 type ArtifactData = ArtifactTypes.ArtifactData
 type ClassBlock = FormatTypes.ClassBlock
@@ -36,48 +38,6 @@ local function collectAll(roots: { any }): { any }
 	end
 
 	return list
-end
-
-local function runLengthEncode(values: { any }): { { value: any, count: number } }
-	local runs = {}
-	if #values == 0 then
-		return runs
-	end
-	local currentVal = values[1]
-	local currentCount = 1
-	for i = 2, #values do
-		if values[i] == currentVal then
-			currentCount += 1
-		else
-			table.insert(runs, { value = currentVal, count = currentCount })
-			currentVal = values[i]
-			currentCount = 1
-		end
-	end
-	table.insert(runs, { value = currentVal, count = currentCount })
-	return runs
-end
-
-local function getValueSize(codec: any, val: any): number
-	local tempW = BufferWriter.new()
-	local ok = pcall(function()
-		codec.write(tempW, val)
-	end)
-	if ok then
-		return buffer.len(tempW:toBuffer())
-	else
-		return 0
-	end
-end
-
-local function varintSize(val: number): number
-	local size = 0
-	local temp = val
-	repeat
-		size += 1
-		temp = bit32.rshift(temp, 7)
-	until temp == 0
-	return size
 end
 
 local function serialize(roots: { any }, artifact: ArtifactData): buffer
@@ -161,34 +121,7 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			local isDefaults = table.create(numBucket)
 
 			for i, inst in bucket do
-				local ok, val = pcall(function()
-					return inst[pm.name]
-				end)
-				if not ok then
-					val = nil
-				end
-
-				local serializedVal = val
-				local isDefault = false
-
-				if pm.codecId == 25 then -- Enum
-					if typeof(val) == "EnumItem" then
-						serializedVal = val.Value
-					elseif type(val) == "number" then
-						serializedVal = val
-					end
-					isDefault = (serializedVal == pm.default)
-				elseif pm.codecId == 26 then -- Referent
-					local targetId = 0
-					if val then
-						targetId = globalIdMap[val:GetDebugId()] or 0
-					end
-					serializedVal = targetId
-					isDefault = (serializedVal == 0)
-				else
-					isDefault = (val == pm.default)
-				end
-
+				local serializedVal, isDefault = PropertyCompare.computeSerializedValue(inst, pm, globalIdMap)
 				serializedVals[i] = serializedVal
 				isDefaults[i] = isDefault
 			end
@@ -197,57 +130,7 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			isDefaultByProp[pIdx] = isDefaults
 		end
 
-		-- Template detection: whole-instance dedup within this class bucket.
-		-- Skipped for buckets with a Referent property, since duplicate instances
-		-- can't safely share reference-target semantics.
-		local templateRefs: { number }? = nil
-		if not hasReferent and numBucket >= 2 and #propsWithCodec > 0 then
-			-- ponytail: O(n^2) dedup scan per class bucket, upgrade: hash canonical value tuples if profiling shows buckets are large
-			local refs = table.create(numBucket, 0)
-			for i = 1, numBucket do
-				if refs[i] == 0 then
-					for j = i + 1, numBucket do
-						if refs[j] == 0 then
-							local equal = true
-							for pIdx = 1, #propsWithCodec do
-								if serializedByProp[pIdx][i] ~= serializedByProp[pIdx][j] then
-									equal = false
-									break
-								end
-							end
-							if equal then
-								refs[j] = i
-							end
-						end
-					end
-				end
-			end
-
-			local anyDup = false
-			for i = 1, numBucket do
-				if refs[i] ~= 0 then
-					anyDup = true
-					break
-				end
-			end
-
-			if anyDup then
-				templateRefs = refs
-			end
-		end
-
-		local effectiveIndices: { number }? = nil
 		local effectiveCount = numBucket
-		if templateRefs then
-			local indices = {}
-			for i = 1, numBucket do
-				if templateRefs[i] == 0 then
-					table.insert(indices, i)
-				end
-			end
-			effectiveIndices = indices
-			effectiveCount = #indices
-		end
 
 		local columns: { PropertyColumn } = {}
 
@@ -262,13 +145,12 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			local nonDefaultValues = {}
 			local nonDefaultCount = 0
 
-			for k = 1, effectiveCount do
-				local i = if effectiveIndices then effectiveIndices[k] else k
+			for i = 1, effectiveCount do
 				local serializedVal = serializedVals[i]
 				local isDefault = isDefaults[i]
 
-				allValues[k] = serializedVal
-				bitmask[k] = not isDefault
+				allValues[i] = serializedVal
+				bitmask[i] = not isDefault
 
 				if not isDefault then
 					table.insert(nonDefaultValues, serializedVal)
@@ -284,39 +166,74 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 				colValues = {}
 				bitmask = table.create(effectiveCount, false)
 			else
-				-- Raw cost
-				local sizeRaw = math.ceil(effectiveCount / 8)
-				for _, v in nonDefaultValues do
-					sizeRaw += getValueSize(codec, v)
-				end
-				local minSize = sizeRaw
+				local minSize = CostEstimator.sizeRaw(codec, effectiveCount, nonDefaultValues)
 
-				-- RLE cost
-				local runs = runLengthEncode(nonDefaultValues)
-				local sizeRle = math.ceil(effectiveCount / 8) + varintSize(#runs)
-				for _, run in runs do
-					sizeRle += varintSize(run.count) + getValueSize(codec, run.value)
-				end
-
-				if sizeRle < minSize then
-					minSize = sizeRle
+				local rleCost = CostEstimator.sizeRle(codec, effectiveCount, nonDefaultValues)
+				if rleCost < minSize then
+					minSize = rleCost
 					encoding = 1
 					colValues = nonDefaultValues
 				end
 
+				-- Dictionary cost: unique values (first-occurrence order) + per-instance index.
+				-- Keyed by the value's actual serialized bytes (via the column's own codec),
+				-- not tostring(v): tostring truncates float precision for Vector3/CFrame/etc,
+				-- so numerically distinct values can print identically and get wrongly
+				-- collapsed into one dictionary entry (silent data corruption on read-back).
+				-- Serialized bytes are exactly what will be written to the wire, so this
+				-- keying is collision-safe by construction.
+				local uniqueValues = {}
+				local dictIndexOf = {}
+				local dictIndices = table.create(nonDefaultCount)
+				for _, v in nonDefaultValues do
+					local keyW = BufferWriter.new()
+					codec.write(keyW, v)
+					local key = buffer.tostring(keyW:toBuffer())
+					local idx = dictIndexOf[key]
+					if not idx then
+						table.insert(uniqueValues, v)
+						idx = #uniqueValues - 1 -- 0-based
+						dictIndexOf[key] = idx
+					end
+					table.insert(dictIndices, idx)
+				end
+
+				local sizeDict = math.ceil(effectiveCount / 8) + CostEstimator.varintSize(#uniqueValues)
+				for _, v in uniqueValues do
+					sizeDict += CostEstimator.getValueSize(codec, v)
+				end
+				for _, idx in dictIndices do
+					sizeDict += CostEstimator.varintSize(idx)
+				end
+
+				local dictIndicesResult: { number }? = nil
+				if sizeDict < minSize then
+					minSize = sizeDict
+					encoding = 2
+					colValues = uniqueValues
+					dictIndicesResult = dictIndices
+				end
+
 				-- AllNonDefault cost
 				if nonDefaultCount == effectiveCount then
-					local sizeAllNonDefault = 0
-					for _, v in allValues do
-						sizeAllNonDefault += getValueSize(codec, v)
-					end
-					if sizeAllNonDefault < minSize then
-						minSize = sizeAllNonDefault
+					local allNonDefaultCost = CostEstimator.sizeAllNonDefault(codec, allValues)
+					if allNonDefaultCost < minSize then
+						minSize = allNonDefaultCost
 						encoding = 4
 						colValues = allValues
 						bitmask = table.create(effectiveCount, true)
+						dictIndicesResult = nil
 					end
 				end
+
+				table.insert(columns, {
+					propertyNameIndex = getStringIndex(pm.name),
+					encoding = encoding,
+					bitmask = bitmask,
+					values = colValues,
+					dictIndices = dictIndicesResult,
+				})
+				continue
 			end
 
 			table.insert(columns, {
@@ -331,12 +248,11 @@ local function serialize(roots: { any }, artifact: ArtifactData): buffer
 			classId = classMeta.id,
 			instanceCount = numBucket,
 			columns = columns,
-			templateRefs = templateRefs,
 		})
 	end
 
 	local formatData: FormatData = {
-		version = 1,
+		version = 3,
 		stringTable = stringTable,
 		classBlocks = classBlocks,
 	}

@@ -63,5 +63,28 @@ return function()
 			check.equal(result.steps[1], "v1_to_v2")
 			check.equal(result.steps[2], "v2_to_v3")
 		end)
+
+		test.case("migrates real FormatData-shaped input via defaultRegistry to currentVersion", function()
+			local data = {
+				version = 1,
+				stringTable = { "Anchored" },
+				classBlocks = {
+					{
+						classId = 1,
+						instanceCount = 2,
+						columns = {},
+						templateRefs = { 0, 0 },
+					},
+				},
+			}
+
+			local result = compat.migrate(compat.defaultRegistry, data, 1)
+
+			check.equal(compat.defaultRegistry.currentVersion, 3)
+			check.equal(#result.stringTable, 1)
+			check.equal(result.stringTable[1], "Anchored")
+			check.equal(#result.classBlocks, 1)
+			check.equal(result.classBlocks[1].instanceCount, 2)
+		end)
 	end)
 end

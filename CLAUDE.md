@@ -108,16 +108,26 @@ Use `@src/buffer/Writer`, `@packages/frktest`, `@tests/SomeName` everywhere. Thi
 ## Completed Milestones
 
 1. ✅ **Artifact system** — `src/artifacts/` fully functional, includes build/parse/resolve/load.
-2. ✅ **Format/Container** — `src/format/` implements header, string table, columnar class blocks with 4 encodings (raw, RLE, AllDefault, AllNonDefault).
-3. ✅ **Instance layer** — `src/instance/` serializes/deserializes Roblox instances with default elision, instance dedup, and template detection.
+2. ✅ **Format/Container** — `src/format/` implements header, string table, columnar class blocks with 5 encodings (raw, RLE, Dictionary, AllDefault, AllNonDefault).
+3. ✅ **Instance layer** — `src/instance/` serializes/deserializes Roblox instances with default elision.
 4. ✅ **Compat system** — `src/compat/` provides versioned schema registry with migration hooks.
-5. ✅ **Integration** — all 20 test specs wired; central serde registry at `src/serde/init.luau` (27 codecs + factories).
+5. ✅ **Integration** — all 20 test specs wired; central serde registry at `src/serde/init.luau` (28 codecs + factories).
+6. ✅ **Extended Codec Coverage** — `ProtectedString`/`ContentId` aliased to the `string` codec; new `src/serde/ray.luau` codec (id 27) for `RayValue.Value`. Artifact-build warning count dropped from 971 to 878 (remaining 878 are all out of scope: 866 `SecurityCapabilities` blocked upstream by Lune, 5 `QDir`/3 `QFont`/1 `AuroraScript` Studio-editor-only/internal, 3 `DateTime` skipped as optional stretch).
+7. ✅ **CLI Tooling** — `cli/` implements `lattice stats/dump/diff` per `docs/superpowers/specs/2026-07-05-cli-tooling-design.md`; wired as `pesde run lattice -- <subcommand> <args>`. `stats`/`dump` read `FormatData` directly (no instance deserialize); `diff` resolves both files via `src/instance/Deserializer.luau` and matches instances by `UniqueId` with positional-tree-order fallback, printing which strategy matched each instance.
+8. ✅ **Column Dictionary Encoding** — added a 5th column encoding (id `2`) that captures repeated-but-shuffled values RLE misses. Wired into the cost-picker (`src/instance/Serializer.luau`, which keys unique dictionary values by their actual codec-serialized bytes — not `tostring(v)`, which can lose precision for Vector3/CFrame/etc and silently collapse distinct values) and read/write (`src/format/Writer.luau`/`Reader.luau`, plus the version-2 reader `src/format/readers/V2.luau`).
+9. ✅ **Schema Evolution** — `src/format/Reader.luau` now dispatches on the format version field to frozen per-version readers (`src/format/readers/V1.luau`, `V2.luau`, `V3.luau`) and pipes the parsed result through `compat.migrate`. v1→v2 was a wire-format change (templateRefs encoding); v2→v3 removed templateRefs entirely. `Writer.luau` only ever writes the current version (3).
+10. ✅ **Incremental/Delta Encoding (MVP)** — `src/patch/` computes and applies "LATP"-format patches between a baseline `.lattice` file and a live instance tree (`diff.luau`/`apply.luau`), matching instances by `UniqueId` with a sibling-scoped positional fallback (`src/patch/Identity.luau`). Scope is baseline + exactly one patch — no chained history, compaction, conflict resolution, or sub-property deltas. Extracted the Enum/Referent-aware property comparison out of `Serializer.luau`'s Pass A into `src/instance/PropertyCompare.luau`, shared by both. Benchmark (1000 instances, 10 moved/5 added/2 removed): 98.3% smaller than a full re-serialize when `UniqueId` is present; documented worse-than-full-reserialize case without it under churn (expected consequence of positional fallback, not a bug). **Known gap**: this identity-matching logic was built independently from `cli/Diff.luau`'s matching function (built in a separate isolated worktree with no visibility into this work) — the two should be reconciled into one shared module, not kept as parallel implementations.
 
 ## Current Work
 
-1. **Roblox Package Polish**: Create standalone Roblox package output; wire darklua to publish `@src/...` requires as relative paths for Studio import.
-2. **Performance Tuning**: Profile benchmarks from PR #18; identify hot paths (CFrame, array encode/decode, bitmask packing); apply micro-optimizations.
-3. **Documentation & Examples**: Write user guide (serialize/deserialize API, artifact format, extending codecs); add end-to-end example (load Roblox place → serialize → read back).
+Lattice is feature-complete for all six previously-planned specs plus dedup removal. Current focus:
+
+1. **`.rbxm` benchmark comparison** — `bench/RbxmComparison.luau` (work-in-progress) provides a harness to compare Lattice serialized sizes against Roblox's native `.rbxm` format. Goal: establish baseline metrics on real test fixtures (tiny-scene, large-scene, etc.) to measure compression efficiency.
+
+Suggested future work (not yet scoped as specs):
+
+2. **Reconcile duplicate identity-matching logic**: `cli/Diff.luau`'s `matchInstances` and `src/patch/Identity.luau` were built independently in isolated worktrees and solve the same UniqueId-with-positional-fallback problem. Unify into one shared module.
+3. **`cli diff`'s cross-class-match gap**: when positional fallback pairs two instances of different classes, `cli/Diff.luau` currently drops the pair silently instead of reporting a class-mismatch. Low severity, flagged in code review.
 
 ## Implementation Notes
 

@@ -62,21 +62,7 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 	for _, cb in data.classBlocks do
 		w:varint(cb.classId)
 		w:varint(cb.instanceCount)
-
-		local effectiveCount = cb.instanceCount
-		if cb.templateRefs then
-			w:varint(1)
-			-- ponytail: templateRefs stored as raw varints, upgrade: RLE if profiling shows it matters
-			effectiveCount = 0
-			for i = 1, cb.instanceCount do
-				w:varint(cb.templateRefs[i])
-				if cb.templateRefs[i] == 0 then
-					effectiveCount += 1
-				end
-			end
-		else
-			w:varint(0)
-		end
+		w:varint(0) -- no templateRefs
 
 		w:varint(#cb.columns)
 
@@ -102,15 +88,26 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 			else
 				-- raw (0) or RLE (1)
 				-- Pack bitmask
-				local numBytes = math.ceil(effectiveCount / 8)
+				local numBytes = math.ceil(#col.bitmask / 8)
 				local maskBytes = buffer.create(numBytes)
-				for i = 1, effectiveCount do
-					if col.bitmask[i] then
-						local byteIdx = math.floor((i - 1) / 8)
-						local bitIdx = (i - 1) % 8
-						local current = buffer.readu8(maskBytes, byteIdx)
-						buffer.writeu8(maskBytes, byteIdx, bit32.bor(current, bit32.lshift(1, bitIdx)))
+				local bitmask = col.bitmask
+				local byteIdx = 0
+				local acc = 0
+				local bitIdx = 0
+				for i = 1, #col.bitmask do
+					if bitmask[i] then
+						acc = bit32.bor(acc, bit32.lshift(1, bitIdx))
 					end
+					bitIdx += 1
+					if bitIdx == 8 then
+						buffer.writeu8(maskBytes, byteIdx, acc)
+						byteIdx += 1
+						acc = 0
+						bitIdx = 0
+					end
+				end
+				if bitIdx > 0 then
+					buffer.writeu8(maskBytes, byteIdx, acc)
 				end
 				w:bytes(maskBytes)
 
@@ -126,6 +123,17 @@ local function write(data: Types.FormatData, artifact: ArtifactTypes.ArtifactDat
 					for _, run in runs do
 						w:varint(run.count)
 						codec.write(w, run.value)
+					end
+				elseif col.encoding == 2 then
+					-- Dictionary: unique values (first-occurrence order), then per-instance index
+					w:varint(#col.values)
+					for _, val in col.values do
+						codec.write(w, val)
+					end
+					local dictIndices = col.dictIndices
+					assert(dictIndices, "Dictionary-encoded column missing dictIndices")
+					for _, idx in dictIndices do
+						w:varint(idx)
 					end
 				end
 			end
