@@ -57,7 +57,9 @@ return function()
 			local buf = format.write(data, mockArtifact :: any)
 			local decoded = format.read(buf, mockArtifact :: any)
 
-			check.equal(decoded.version, data.version)
+			-- format.write always writes the current schema version (4), regardless
+			-- of the version field on the input FormatData.
+			check.equal(decoded.version, 4)
 			check.equal(#decoded.stringTable, #data.stringTable)
 			check.equal(decoded.stringTable[1], data.stringTable[1])
 			check.equal(#decoded.classBlocks, 1)
@@ -233,6 +235,60 @@ return function()
 			check.equal(col.dictIndices[2], 1)
 			check.equal(col.dictIndices[3], 0)
 			check.equal(col.dictIndices[4], 1)
+			check.equal(col.dictIndices[5], 0)
+			for i = 1, 5 do
+				check.equal(col.bitmask[i], true)
+			end
+		end)
+
+		test.case("handles v4 length-prefixed class blocks", function()
+			local pos1 = roblox.Vector3.new(1, 2, 3)
+			local pos2 = roblox.Vector3.new(4, 5, 6)
+
+			local data: format.FormatData = {
+				version = 4,
+				stringTable = { "Anchored", "Position" },
+				classBlocks = {
+					{
+						classId = 1,
+						instanceCount = 5,
+						columns = {
+							{
+								propertyNameIndex = 2, -- "Position"
+								encoding = 2, -- Dictionary
+								bitmask = { true, true, true, true, true },
+								values = { pos1, pos2 },
+								dictIndices = { 0, 1, 0, 1, 0 },
+							},
+						},
+					},
+				},
+			}
+
+			local buf = format.write(data, mockArtifact :: any)
+
+			-- Writer always writes the current version (4).
+			local versionByte = buffer.readu8(buf, 4)
+			local versionByte2 = buffer.readu8(buf, 5)
+			check.equal(versionByte, 4)
+			check.equal(versionByte2, 0)
+
+			local decoded = format.read(buf, mockArtifact :: any)
+			check.equal(decoded.version, 4)
+			check.equal(#decoded.classBlocks, 1)
+
+			local block = decoded.classBlocks[1]
+			check.equal(block.classId, 1)
+			check.equal(block.instanceCount, 5)
+
+			local col = block.columns[1]
+			check.equal(col.encoding, 2)
+			check.equal(#col.values, 2)
+			check.equal(col.values[1], pos1)
+			check.equal(col.values[2], pos2)
+			check.equal(col.dictIndices ~= nil, true)
+			check.equal(col.dictIndices[1], 0)
+			check.equal(col.dictIndices[2], 1)
 			check.equal(col.dictIndices[5], 0)
 			for i = 1, 5 do
 				check.equal(col.bitmask[i], true)

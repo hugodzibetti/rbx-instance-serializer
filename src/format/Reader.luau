@@ -9,6 +9,7 @@ local compat = require("@src/compat")
 local V1 = require("@src/format/readers/V1")
 local V2 = require("@src/format/readers/V2")
 local V3 = require("@src/format/readers/V3")
+local V4 = require("@src/format/readers/V4")
 
 local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData): Types.FormatData
 	local r = BufferReader.new(artifactBuffer)
@@ -30,6 +31,8 @@ local function read(artifactBuffer: buffer, artifact: ArtifactTypes.ArtifactData
 		raw = V2.readV2Body(r, artifact)
 	elseif version == 3 then
 		raw = V3.readV3Body(r, artifact)
+	elseif version == 4 then
+		raw = V4.readV4Body(r, artifact)
 	else
 		error("Unsupported format version: " .. tostring(version))
 	end

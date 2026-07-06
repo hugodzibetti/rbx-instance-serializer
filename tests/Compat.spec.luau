@@ -80,7 +80,7 @@ return function()
 
 			local result = compat.migrate(compat.defaultRegistry, data, 1)
 
-			check.equal(compat.defaultRegistry.currentVersion, 3)
+			check.equal(compat.defaultRegistry.currentVersion, 4)
 			check.equal(#result.stringTable, 1)
 			check.equal(result.stringTable[1], "Anchored")
 			check.equal(#result.classBlocks, 1)

@@ -68,7 +68,7 @@ return function()
 			check.equal(col.values[3], roblox.Vector3.new(4, 5, 6))
 		end)
 
-		test.case("writes version 3 (no templateRefs) and round-trips correctly", function()
+		test.case("writes version 4 (length-prefixed class blocks) and round-trips correctly", function()
 			local data: format.FormatData = {
 				version = 3,
 				stringTable = { "Anchored", "Position" },
@@ -94,14 +94,14 @@ return function()
 
 			local buf = format.write(data, mockArtifact :: any)
 
-			-- Confirm the header reports version 3.
+			-- Confirm the header reports version 4 (Writer always writes current version).
 			local versionByte = buffer.readu8(buf, 4)
 			local versionByte2 = buffer.readu8(buf, 5)
-			check.equal(versionByte, 3)
+			check.equal(versionByte, 4)
 			check.equal(versionByte2, 0)
 
 			local decoded = format.read(buf, mockArtifact :: any)
-			check.equal(decoded.version, 3)
+			check.equal(decoded.version, 4)
 
 			local block = decoded.classBlocks[1]
 			check.equal(block.templateRefs, nil)
