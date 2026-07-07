@@ -25,20 +25,21 @@ Additionally, `origin/master` is currently missing `cli/`, `src/patch/`, and `sr
 
 ### 1. `@lune/roblox` and `@lune/task` shim via darklua, behind one named seam
 
-The darklua rewrite (below) is invisible if it's scattered across 20+ raw `require("@lune/roblox")` call sites — nothing in `src/serde/color3.luau` would tell a reader that this require gets swapped at build time. Instead, confine it to two small, clearly-named modules that everything else depends on:
+The darklua rewrite (below) is invisible if it's scattered across 20+ raw `require("@lune/roblox")` call sites — nothing in `src/serde/color3.luau` would tell a reader that this require gets swapped at build time. Instead, confine it to two small, clearly-named modules that everything else depends on, grouped under `src/env/` rather than sitting loose at the top of `src/` (consistent with every other concern in `src/` being folder-per-topic):
 
 ```
 src/
-├── RobloxTypes.luau         -- the ONE file that says require("@lune/roblox")
-├── LuneTask.luau             -- the ONE file that says require("@lune/task")
+├── env/
+│   ├── RobloxTypes.luau      -- the ONE file that says require("@lune/roblox")
+│   └── LuneTask.luau          -- the ONE file that says require("@lune/task")
 ├── serde/
-│   └── color3.luau           -- require("@src/RobloxTypes"), never "@lune/roblox" directly
+│   └── color3.luau            -- require("@src/env/RobloxTypes"), never "@lune/roblox" directly
 └── instance/
-    ├── Serializer.luau        -- require("@src/RobloxTypes"), require("@src/LuneTask")
+    ├── Serializer.luau         -- require("@src/env/RobloxTypes"), require("@src/env/LuneTask")
     └── Deserializer.luau
 ```
 
-`src/RobloxTypes.luau`:
+`src/env/RobloxTypes.luau`:
 ```luau
 -- Lune has no game engine, so it needs an explicit binding for Roblox datatypes;
 -- real Roblox has these as ambient globals instead. Under Lune this just forwards
@@ -48,9 +49,9 @@ src/
 return require("@lune/roblox")
 ```
 
-`src/LuneTask.luau` follows the same pattern for `require("@lune/task")`.
+`src/env/LuneTask.luau` follows the same pattern for `require("@lune/task")`.
 
-Every codec and instance-layer file requires `@src/RobloxTypes` / `@src/LuneTask` like any other internal module — no build-magic string in sight. The magic itself still exists, but it now lives in exactly one place per binding, with a comment explaining it.
+Every codec and instance-layer file requires `@src/env/RobloxTypes` / `@src/env/LuneTask` like any other internal module — no build-magic string in sight. The magic itself still exists, but it now lives in exactly one place per binding, with a comment explaining it.
 
 The darklua side, unchanged from the original proposal: `.darklua.json`'s existing `convert_require` rule already maps `@src` to a real directory (`sources: { "@src": "./src" }`); the same mechanism accepts another prefix:
 
@@ -59,29 +60,31 @@ sources: { "@src": "./src", "@lune": "./release-shims" }
 ```
 
 ```
-release-shims/            -- only exists for the darklua build; Lune never touches this
+release-shims/            -- only exists for the darklua build; Lune never touches this; mirrors src/env/ 1:1 by filename
 ├── roblox.luau            -- return { Color3 = Color3, Vector3 = Vector3, Instance = Instance, Enum = Enum, ... }
 └── task.luau              -- return task
 ```
 
-`pesde run test` and the CLI are unaffected — Lune resolves `@lune/roblox`/`@lune/task` through its own builtin binding inside `RobloxTypes.luau`/`LuneTask.luau`, never through `.darklua.json`.
+`pesde run test` and the CLI are unaffected — Lune resolves `@lune/roblox`/`@lune/task` through its own builtin binding inside `src/env/RobloxTypes.luau`/`LuneTask.luau`, never through `.darklua.json`.
 
-### 2. Dev-only tooling moves out of `src/` entirely
+### 2. Dev-only tooling moves into the existing Lune-only homes (`scripts/`, `cli/`), not a new top-level folder
 
-Relying on `scripts/BuildPackage.luau` to remember an exclude-list (`src/artifacts/build/`, `src/parallel/Worker.luau`) is tribal knowledge that silently breaks the moment someone adds a new Lune-only file under `src/` and forgets to exclude it. Instead, make "everything under `src/` ships to Roblox" a structural fact by relocating the two Lune-only trees out of `src/`, next to `cli/` (which is already handled this way):
+Relying on `scripts/BuildPackage.luau` to remember an exclude-list (`src/artifacts/build/`, `src/parallel/Worker.luau`) is tribal knowledge that silently breaks the moment someone adds a new Lune-only file under `src/` and forgets to exclude it. Instead, make "everything under `src/` ships to Roblox" a structural fact by relocating the two Lune-only trees into the two folders that already mean "Lune dev tooling, never ships" — `scripts/` and `cli/` — rather than inventing a third top-level category:
 
 ```
 lattice/
-├── src/                     -- everything here ships to Roblox, no exceptions, no exclude-list
-├── build-tools/
-│   └── artifacts/           -- moved from src/artifacts/build/; @lune/process, @lune/fs, @lune/serde stay raw (fine, never ships)
-│       ├── Run.luau
-│       └── buildArtifact.luau
-├── cli/                     -- unchanged
-│   └── Worker.luau          -- moved from src/parallel/Worker.luau (superseded Lune-process backend)
+├── src/                      -- everything here ships to Roblox, no exceptions, no exclude-list
+├── scripts/
+│   ├── artifacts/             -- moved from src/artifacts/build/; @lune/process, @lune/fs, @lune/serde stay raw (fine, never ships)
+│   │   ├── Run.luau
+│   │   └── buildArtifact.luau
+│   └── BuildPackage.luau
+├── cli/
+│   └── parallel/
+│       └── Worker.luau        -- moved from src/parallel/Worker.luau (superseded Lune-process backend), nested to mirror src/parallel/'s naming
 ```
 
-`scripts/BuildPackage.luau` then simply runs `darklua process src dist/lattice` unmodified — no exclude-list to maintain, because there's nothing under `src/` left to exclude. `pesde.toml`'s `[dependencies]`/require paths referencing the moved files (`src/artifacts/build/Run.luau` script entry, any `@src/artifacts/build/...` requires) need updating to their new `build-tools/` / `cli/` locations.
+`scripts/BuildPackage.luau` then simply runs `darklua process src dist/lattice` unmodified — no exclude-list to maintain, because there's nothing under `src/` left to exclude. `pesde.toml`'s script entries and any `@src/artifacts/build/...` / `@src/parallel/Worker` requires need updating to their new `scripts/artifacts/` / `cli/parallel/` locations.
 
 ### 3. Two release channels from one build
 
@@ -99,5 +102,5 @@ Rebuild `dist/lattice/` with the above changes, sync via the existing Rojo proje
 ## Testing
 
 - Existing `pesde run test` suite must stay green (proves `src/` is untouched and still correct under Lune).
-- New: a lightweight check (script or manual step) that `dist/lattice/` contains zero `@lune` references after build, catching future regressions if a new codec/module bypasses `RobloxTypes`/`LuneTask` and requires `@lune/*` directly.
+- New: a lightweight check (script or manual step) that `dist/lattice/` contains zero `@lune` references after build, catching future regressions if a new codec/module bypasses `src/env/RobloxTypes`/`LuneTask` and requires `@lune/*` directly.
 - `tests/studio-test.server.luau` passing in actual Studio is the release-readiness acceptance criterion.
