@@ -3,8 +3,8 @@
 --!optimize 2
 
 local roblox = require("@lune/roblox")
-local process = require("@lune/process")
 local task = require("@lune/task")
+local RobloxBackend = require("@src/parallel/RobloxBackend")
 local Types = require("@src/types")
 local ArtifactTypes = require("@src/artifacts/types")
 local FormatTypes = require("@src/format/types")
@@ -230,10 +230,24 @@ end
 -- Parses the v4 header + string table only (via FormatReader's magic/version check
 -- plus a slice of V4's block-length-prefix logic), slices each class block's raw
 -- bytes directly out of `data` (no full parse - that's the point of the v4 length
--- prefix), and hands each slice to its own `lune run src/parallel/Worker.luau --
--- decode` child process to parse into typed PropertyColumns. Stage C (instance
--- construction) then runs sequentially in the parent via the same
--- buildInstancesFromFormatData used by deserialize().
+-- prefix), and hands each slice to its own Stage B decoder via one of three
+-- backends, in order of preference:
+--
+--   a. Roblox Actor parallelism (RobloxBackend.decodeClassBlocksParallel) - used
+--      inside the real Roblox engine. Takes an ordered array of per-class-block
+--      decode payload buffers (the SAME wire format src/parallel/Payload.luau's
+--      Payload.decode consumes) and returns an ordered array of result buffers
+--      (instanceCount/columnCount/columns..., same shape a Worker.luau decode-mode
+--      child process emits on stdout), in input order. No Lune processes involved.
+--   b. Lune worker-process path (the original implementation): one
+--      `lune run src/parallel/Worker.luau -- decode` child process per class block,
+--      launched via blocking process.exec wrapped in task.spawn coroutines.
+--   c. Sequential fallback: if neither Actors nor @lune/process are available,
+--      give up on parallelism and call the plain sequential deserialize() -
+--      correctness preserved, just not fast.
+--
+-- Stage C (instance construction) then runs sequentially in the parent via the
+-- same buildInstancesFromFormatData used by deserialize().
 --
 -- Only supports v4 input (parallel encoding always writes v4; this is not a
 -- general-purpose replacement for the sequential/versioned deserialize() path).
@@ -283,9 +297,11 @@ local function deserializeParallel(data: buffer, artifact: ArtifactData): { any 
 	end
 
 	local n = #slices
-	local decodedColumns: { any } = table.create(n)
-	local errors: { string? } = table.create(n)
 
+	-- Build the per-class-block decode payload buffers once. Both Actor(path a)
+	-- and Lune-process(path b) backends consume exactly this same wire format
+	-- (see src/parallel/Payload.luau's Payload.decode).
+	local payloads: { buffer } = table.create(n)
 	for idx, slice in slices do
 		local classMeta = artifact.classById[slice.classId]
 		assert(classMeta, "Class metadata not found in artifact for class ID: " .. tostring(slice.classId))
@@ -309,49 +325,79 @@ local function deserializeParallel(data: buffer, artifact: ArtifactData): { any 
 		buffer.copy(bodyBuf, 0, data, slice.bodyStart, slice.bodyLength)
 		payloadWriter:bytes(bodyBuf)
 
-		local payloadStr = payloadWriter:toString()
-
-		task.spawn(function()
-			local result = process.exec("lune", { "run", "src/parallel/Worker.luau", "--", "decode" }, {
-				stdio = { stdin = payloadStr },
-			})
-			if result.ok then
-				decodedColumns[idx] = result.stdout
-			else
-				errors[idx] = string.format(
-					"parallel decode failed for class %s: %s",
-					classMeta.name,
-					if result.stderr ~= "" then result.stderr else "exited with code " .. tostring(result.code)
-				)
-			end
-		end)
+		payloads[idx] = payloadWriter:toBuffer()
 	end
 
-	local remaining = n
-	while remaining > 0 do
-		remaining = 0
+	-- decodedColumns[idx] is the result buffer for class block idx - the same
+	-- shape both backends produce (instanceCount/columnCount/columns...).
+	local decodedColumns: { buffer } = table.create(n)
+
+	if RobloxBackend.isActorParallelAvailable() then
+		-- Path a: Roblox Actor parallelism, no Lune processes spawned.
+		decodedColumns = RobloxBackend.decodeClassBlocksParallel(payloads)
+	else
+		-- Path b/c: try the Lune worker-process path; if @lune/process isn't
+		-- resolvable (a hypothetical third environment with neither Actors nor
+		-- Lune), fall back to the plain sequential deserialize() - correctness
+		-- preserved, just no parallelism.
+		local processOk, process = pcall(require, "@lune/process")
+		if not processOk or process == nil then
+			return deserialize(data, artifact)
+		end
+		local processModule = process :: any
+
+		local decodedStrs: { string? } = table.create(n)
+		local errors: { string? } = table.create(n)
+
+		for idx, payload in payloads do
+			local classMeta = artifact.classById[slices[idx].classId]
+			local payloadStr = buffer.tostring(payload)
+
+			task.spawn(function()
+				local result = processModule.exec("lune", { "run", "src/parallel/Worker.luau", "--", "decode" }, {
+					stdio = { stdin = payloadStr },
+				})
+				if result.ok then
+					decodedStrs[idx] = result.stdout
+				else
+					errors[idx] = string.format(
+						"parallel decode failed for class %s: %s",
+						classMeta.name,
+						if result.stderr ~= "" then result.stderr else "exited with code " .. tostring(result.code)
+					)
+				end
+			end)
+		end
+
+		local remaining = n
+		while remaining > 0 do
+			remaining = 0
+			for idx = 1, n do
+				if decodedStrs[idx] == nil and errors[idx] == nil then
+					remaining += 1
+				end
+			end
+			if remaining > 0 then
+				task.wait(0.01)
+			end
+		end
+
 		for idx = 1, n do
-			if decodedColumns[idx] == nil and errors[idx] == nil then
-				remaining += 1
+			if errors[idx] then
+				error(errors[idx])
 			end
 		end
-		if remaining > 0 then
-			task.wait(0.01)
+
+		for idx = 1, n do
+			decodedColumns[idx] = buffer.fromstring(decodedStrs[idx] :: string)
 		end
 	end
 
-	for idx = 1, n do
-		if errors[idx] then
-			error(errors[idx])
-		end
-	end
-
-	-- Decode each worker's stdout back into PropertyColumns.
+	-- Decode each result buffer back into PropertyColumns.
 	local classBlocks: { FormatTypes.ClassBlock } = table.create(n)
 	for idx, slice in slices do
 		local classMeta = artifact.classById[slice.classId]
-		local out = buffer.fromstring(decodedColumns[idx] :: string)
-		local or_ = BufferReader.new(out)
+		local or_ = BufferReader.new(decodedColumns[idx])
 
 		local instanceCount = or_:varint()
 		local columnCount = or_:varint()

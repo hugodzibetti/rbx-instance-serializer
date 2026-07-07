@@ -3,8 +3,8 @@
 --!optimize 2
 
 local roblox = require("@lune/roblox")
-local process = require("@lune/process")
 local task = require("@lune/task")
+local RobloxBackend = require("@src/parallel/RobloxBackend")
 local Types = require("@src/types")
 local ArtifactTypes = require("@src/artifacts/types")
 local FormatTypes = require("@src/format/types")
@@ -269,6 +269,33 @@ end
 -- time (not ~N seconds), confirming Lune's scheduler actually interleaves the
 -- blocking process.exec calls across coroutines - this is true concurrent execution,
 -- not sequential-in-disguise.
+-- Parallel sibling of serialize(): Stage A runs sequentially in the parent (see
+-- runStageA above), then each class block's Stage B work (final encoding choice +
+-- byte writing) is delegated to one of three backends, in order of preference:
+--
+--   a. Roblox Actor parallelism (RobloxBackend.encodeClassBlocksParallel) - used
+--      when running inside the real Roblox engine where task.desynchronize exists.
+--      The backend takes an ordered array of per-class-block payload buffers
+--      (the SAME wire format src/parallel/Payload.luau's Payload.encode consumes)
+--      and returns an ordered array of result buffers (length-prefixed v4 class
+--      block bytes), in input order. No Lune processes involved.
+--   b. Lune worker-process path (today's original implementation): one
+--      `lune run src/parallel/Worker.luau` child process per class block, launched
+--      via blocking process.exec wrapped in task.spawn coroutines. Verified
+--      experimentally (see the historical comment below) to give true concurrent
+--      execution across coroutines under Lune's scheduler.
+--   c. Sequential fallback: if neither Actors nor @lune/process are available
+--      (a hypothetical third environment), give up on parallelism and just call
+--      the plain sequential serialize() - correctness preserved, just not fast.
+--
+-- Concurrency note (path b): Lune 0.10.4's process.create + ChildProcessWriter:close()
+-- does not reliably signal EOF to the child (a prior smoke test hung forever), so
+-- workers are launched via the blocking process.exec, each wrapped in its own
+-- task.spawn coroutine. Verified experimentally in this task: N concurrent
+-- task.spawn-wrapped process.exec calls, each sleeping 1s in the child, complete
+-- together in ~1.1s wall time (not ~N seconds), confirming Lune's scheduler
+-- actually interleaves the blocking process.exec calls across coroutines - this is
+-- true concurrent execution, not sequential-in-disguise.
 local function serializeParallel(roots: { any }, artifact: ArtifactData): buffer
 	local stageAResults = runStageA(roots, artifact)
 
@@ -294,49 +321,80 @@ local function serializeParallel(roots: { any }, artifact: ArtifactData): buffer
 	end
 
 	local n = #stageAResults
-	local blockBytes: { string? } = table.create(n)
-	local errors: { string? } = table.create(n)
-	local threads = table.create(n)
 
+	-- Build the per-class-block payload buffers once (step 3 of the worker
+	-- protocol). Both Actor(path a) and Lune-process(path b) backends consume
+	-- exactly this same wire format (see src/parallel/Payload.luau's Payload.encode).
+	local payloads: { buffer } = table.create(n)
 	for idx, sa in stageAResults do
-		local payload = buildWorkerPayload(sa, getStringIndex)
-		local payloadStr = buffer.tostring(payload)
-
-		local thread = task.spawn(function()
-			local result = process.exec("lune", { "run", "src/parallel/Worker.luau" }, {
-				stdio = { stdin = payloadStr },
-			})
-			if result.ok then
-				blockBytes[idx] = result.stdout
-			else
-				errors[idx] = string.format(
-					"parallel encode failed for class %s: %s",
-					sa.className,
-					if result.stderr ~= "" then result.stderr else "exited with code " .. tostring(result.code)
-				)
-			end
-		end)
-		table.insert(threads, thread)
+		payloads[idx] = buildWorkerPayload(sa, getStringIndex)
 	end
 
-	-- Wait for all workers to finish (each task.spawn'd thread completes when its
-	-- blocking process.exec call returns).
-	local remaining = n
-	while remaining > 0 do
-		remaining = 0
+	-- blockBytes[idx] is the finished, length-prefixed v4 class-block bytes for
+	-- class block idx - the same shape both backends produce.
+	local blockBytes: { buffer } = table.create(n)
+
+	if RobloxBackend.isActorParallelAvailable() then
+		-- Path a: Roblox Actor parallelism, no Lune processes spawned.
+		blockBytes = RobloxBackend.encodeClassBlocksParallel(payloads)
+	else
+		-- Path b/c: try the Lune worker-process path; if @lune/process isn't
+		-- resolvable (a hypothetical third environment with neither Actors nor
+		-- Lune), fall back to the plain sequential serialize() - correctness
+		-- preserved, just no parallelism.
+		local processOk, process = pcall(require, "@lune/process")
+		if not processOk or process == nil then
+			return serialize(roots, artifact)
+		end
+		local processModule = process :: any
+
+		local blockStrs: { string? } = table.create(n)
+		local errors: { string? } = table.create(n)
+		local threads = table.create(n)
+
+		for idx, payload in payloads do
+			local payloadStr = buffer.tostring(payload)
+
+			local thread = task.spawn(function()
+				local result = processModule.exec("lune", { "run", "src/parallel/Worker.luau" }, {
+					stdio = { stdin = payloadStr },
+				})
+				if result.ok then
+					blockStrs[idx] = result.stdout
+				else
+					errors[idx] = string.format(
+						"parallel encode failed for class %s: %s",
+						stageAResults[idx].className,
+						if result.stderr ~= "" then result.stderr else "exited with code " .. tostring(result.code)
+					)
+				end
+			end)
+			table.insert(threads, thread)
+		end
+
+		-- Wait for all workers to finish (each task.spawn'd thread completes when
+		-- its blocking process.exec call returns).
+		local remaining = n
+		while remaining > 0 do
+			remaining = 0
+			for idx = 1, n do
+				if blockStrs[idx] == nil and errors[idx] == nil then
+					remaining += 1
+				end
+			end
+			if remaining > 0 then
+				task.wait(0.01)
+			end
+		end
+
 		for idx = 1, n do
-			if blockBytes[idx] == nil and errors[idx] == nil then
-				remaining += 1
+			if errors[idx] then
+				error(errors[idx])
 			end
 		end
-		if remaining > 0 then
-			task.wait(0.01)
-		end
-	end
 
-	for idx = 1, n do
-		if errors[idx] then
-			error(errors[idx])
+		for idx = 1, n do
+			blockBytes[idx] = buffer.fromstring(blockStrs[idx] :: string)
 		end
 	end
 
@@ -356,7 +414,7 @@ local function serializeParallel(roots: { any }, artifact: ArtifactData): buffer
 
 	local totalLen = headerWriter:len()
 	for idx = 1, n do
-		totalLen += #(blockBytes[idx] :: string)
+		totalLen += buffer.len(blockBytes[idx])
 	end
 
 	local outBuf = buffer.create(totalLen)
@@ -364,9 +422,10 @@ local function serializeParallel(roots: { any }, artifact: ArtifactData): buffer
 	buffer.copy(outBuf, 0, headerBuf, 0, headerWriter:len())
 	local offset = headerWriter:len()
 	for idx = 1, n do
-		local bytes = blockBytes[idx] :: string
-		buffer.writestring(outBuf, offset, bytes)
-		offset += #bytes
+		local bytes = blockBytes[idx]
+		local len = buffer.len(bytes)
+		buffer.copy(outBuf, offset, bytes, 0, len)
+		offset += len
 	end
 
 	return outBuf

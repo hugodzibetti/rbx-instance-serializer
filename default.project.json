@@ -1,0 +1,18 @@
+{
+  "name": "lattice",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Lattice": {
+        "$path": "dist/lattice"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "LatticeTest": {
+        "$path": "tests/studio-test.server.luau"
+      }
+    }
+  }
+}
