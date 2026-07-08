@@ -23,6 +23,10 @@ Additionally, `origin/master` is currently missing `cli/`, `src/patch/`, and `sr
 
 ## Design
 
+### 0. Validation spike (must pass before proceeding with the rest of this design)
+
+Everything in section 1 — the nested `sources` mapping (`@src` → `./src` and `@lune` → `./src/env/shims`, one nested inside the other), `path`-mode parsing of `"@lune/roblox"` as package `@lune` + subpath `roblox`, and darklua's Roblox-target relative-require generation — is inferred from darklua's documentation, not verified against this repo. Before writing `RobloxTypes.luau`/`LuneTask.luau`/the shim files for real: build one throwaway codec-sized example (a single file requiring `@lune/roblox` via a `@src/env/...`-style indirection) with the proposed `.darklua.json` config, run `darklua process`, and inspect the actual output. If the nested-sources approach doesn't work as expected, fall back to a flat `@lune` → top-level `release-shims/` mapping (the earlier version of this design) rather than debugging darklua's path resolution mid-implementation.
+
 ### 1. `@lune/roblox` and `@lune/task` shim via darklua, behind one named seam
 
 The darklua rewrite (below) is invisible if it's scattered across 20+ raw `require("@lune/roblox")` call sites — nothing in `src/serde/color3.luau` would tell a reader that this require gets swapped at build time. Instead, confine it to two small, clearly-named modules that everything else depends on, grouped under `src/env/` rather than sitting loose at the top of `src/` (consistent with every other concern in `src/` being folder-per-topic):
@@ -56,6 +60,10 @@ return require("@lune/roblox")
 
 Every codec and instance-layer file requires `@src/env/RobloxTypes` / `@src/env/LuneTask` like any other internal module — no build-magic string in sight. The magic itself still exists, but it now lives in exactly one place per binding, with a comment explaining it.
 
+This is a deliberate, narrow exception to CLAUDE.md's stated rule that "each codec is leaf: no dependencies on other codecs" — `RobloxTypes`/`LuneTask` are shared foundational dependencies in the same category `Writer`/`Reader` already are, not a codec-to-codec dependency. CLAUDE.md's "Key Design Decisions" section should be updated to say so explicitly once this lands, so it doesn't read as an unexplained rule violation later.
+
+`src/env/shims/roblox.luau` is a hand-maintained list of engine globals (`Color3`, `Vector3`, `Instance`, `Enum`, ...). Nothing under `pesde run test` exercises it, since Lune always resolves the real `@lune/roblox` binding instead — a codec added later that reaches for a datatype missing from the shim table will pass every Lune test and CI check, and only fail at Studio load time. There's no automated check tying "fields the shim table exports" to "datatypes the codecs actually use"; the closest thing is the manual `tests/studio-test.server.luau` smoke test in section 5, which doesn't necessarily exercise every codec. Treat the shim table as something to re-check by hand whenever a new codec is added that touches a Roblox datatype not already in the list.
+
 The darklua side, unchanged from the original proposal: `.darklua.json`'s existing `convert_require` rule already maps `@src` to a real directory (`sources: { "@src": "./src" }`); the same mechanism accepts another prefix, this time pointing at the nested `shims/` folder instead of a new top-level one:
 
 ```json
@@ -85,6 +93,8 @@ lattice/
 
 `scripts/BuildPackage.luau` then simply runs `darklua process src dist/lattice` unmodified — no exclude-list to maintain, because there's nothing under `src/` left to exclude. `pesde.toml`'s script entries and any `@src/artifacts/build/...` / `@src/parallel/Worker` requires need updating to their new `scripts/artifacts/` / `cli/parallel/` locations.
 
+This move has one non-obvious call site: `src/instance/Serializer.luau`'s Lune-process fallback path does `process.exec("lune", { "run", "src/parallel/Worker.luau" })` — a bare string literal, not a `@src/...` require, easy to miss when grepping for requires. It must be updated to `"cli/parallel/Worker.luau"` alongside the move, or the fallback (used for local Lune-only parallel testing, not the Roblox Actor path) silently breaks.
+
 ### 3. Two release channels from one build
 
 - **Manual / Rojo**: `dist/lattice/` as built above; already wired into `default.project.json` (`ReplicatedStorage.Lattice`). No further work needed once (1) and (2) land.
@@ -93,6 +103,8 @@ lattice/
 ### 4. Master reconciliation
 
 Before cutting any release from `master`: reconcile `develop` → `master` per `docs/branch-cleanup-plan.md` Phase 3, Option A (PR merging reconciled `develop` into `master`), so `master` regains `cli/`, `src/patch/`, and `src/serde/ray.luau`. This is a prerequisite, not part of the build-pipeline work itself.
+
+**Sequencing**: sections 1–2 (the `src/env/` restructuring and dev-tooling moves) land on `develop` first, as their own reviewable commits, before the master reconciliation PR — not bundled into it and not after it. This keeps the reconciliation PR to exactly what its name says (bringing master back in parity with develop's existing state) rather than mixing in a structural refactor, and means master picks up the release-readiness work automatically once it's reconciled.
 
 ### 5. Verification
 
