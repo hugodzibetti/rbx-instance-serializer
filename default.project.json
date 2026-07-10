@@ -6,6 +6,9 @@
       "$className": "ReplicatedStorage",
       "Lattice": {
         "$path": "dist/lattice"
+      },
+      "LatticeArtifact": {
+        "$path": "dist/artifact"
       }
     },
     "ServerScriptService": {

@@ -23,6 +23,10 @@ lune run scripts/RunTests.luau  # same thing, verbose
 lune run tests/_scratch_run.luau  # see tests/*.spec.luau for pattern
 ```
 
+## Verification
+
+`pesde run test` only proves codecs work against Lune's mocked `@lune/roblox` bindings, not real Roblox globals — this project has already shipped require-path bugs that only broke in actual Studio. Before reporting any change to `src/` or `cli/` as done, run the project `/verify` skill (`.claude/skills/verify/SKILL.md`), which runs the Lune suite and then exercises the codecs in a live Roblox Studio session via the `Roblox_Studio` MCP server (`.mcp.json`).
+
 ## Architecture
 
 ### Three layers

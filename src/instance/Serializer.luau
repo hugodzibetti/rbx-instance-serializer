@@ -17,12 +17,23 @@ type ClassBlock = FormatTypes.ClassBlock
 type PropertyColumn = FormatTypes.PropertyColumn
 type FormatData = FormatTypes.FormatData
 
+-- Engine-injected classes that Roblox auto-attaches to instances (e.g. TouchTransmitter
+-- on touch-connected Parts) and that are not creatable via Instance.new, so a round-trip
+-- would fail on deserialize. They carry no user-authored data, so it's safe to skip them
+-- (and their subtree) entirely rather than serialize something we can't read back.
+local NON_CREATABLE_CLASSES = {
+	TouchTransmitter = true,
+}
+
 local function collectAll(roots: { any }): { any }
 	local list = {}
 	local visited = {}
 
 	local function dfs(inst: any)
 		if not inst or visited[inst] then
+			return
+		end
+		if NON_CREATABLE_CLASSES[inst.ClassName] then
 			return
 		end
 		visited[inst] = true
