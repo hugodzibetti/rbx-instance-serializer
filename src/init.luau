@@ -21,7 +21,7 @@ export type PropertyMetadata = ArtifactTypes.PropertyMetadata
 return {
 	Writer = Writer,
 	Reader = Reader,
-	serde = Serde,
+	Serde = Serde,
 
 	loadArtifact = Artifact.load,
 	serialize = Serializer.serialize,
