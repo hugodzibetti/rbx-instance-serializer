@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "Roblox_Studio": {
+      "command": "env",
+      "args": [
+        "WINEPREFIX=/home/hugo/.local/share/vinegar/prefixes/studio",
+        "/home/hugo/.local/share/vinegar/kombucha-stable+20260614215204/bin/wine",
+        "Z:\\home\\hugo\\.local\\share\\vinegar\\versions\\version-4bb3958a2cde4efb\\StudioMCP.exe"
+      ]
+    }
+  }
+}
