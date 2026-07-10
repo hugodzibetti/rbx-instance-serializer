@@ -6,7 +6,7 @@
 -- .lattice buffer, reconstructing the current tree. MVP scope only: single
 -- patch against a single baseline, no chained patches.
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 local ArtifactTypes = require("@src/artifacts/types")
 local Deserializer = require("@src/instance/Deserializer")
 local Identity = require("@src/patch/Identity")

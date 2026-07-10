@@ -2,8 +2,6 @@
 --!native
 --!optimize 2
 
-local roblox = require("@lune/roblox")
-local task = require("@lune/task")
 local RobloxBackend = require("@src/parallel/RobloxBackend")
 local Types = require("@src/types")
 local ArtifactTypes = require("@src/artifacts/types")
@@ -347,6 +345,7 @@ local function serializeParallel(roots: { any }, artifact: ArtifactData): buffer
 			return serialize(roots, artifact)
 		end
 		local processModule = process :: any
+		local task = require("@lune/task") :: any
 
 		local blockStrs: { string? } = table.create(n)
 		local errors: { string? } = table.create(n)

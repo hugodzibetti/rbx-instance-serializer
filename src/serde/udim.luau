@@ -2,7 +2,7 @@
 --!native
 --!optimize 2
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 local types = require("@src/types")
 
 export type UDim = typeof(roblox.UDim.new(0, 0))

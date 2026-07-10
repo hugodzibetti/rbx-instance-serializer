@@ -2,7 +2,7 @@
 --!native
 --!optimize 2
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 local types = require("@src/types")
 
 export type Ray = typeof(roblox.Ray.new(roblox.Vector3.new(0, 0, 0), roblox.Vector3.new(0, 0, 0)))

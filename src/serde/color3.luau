@@ -2,7 +2,7 @@
 --!native
 --!optimize 2
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 
 local Writer = require("@src/buffer/Writer")
 local Reader = require("@src/buffer/Reader")

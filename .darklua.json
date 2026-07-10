@@ -4,13 +4,19 @@
       rule: "convert_require",
       current: {
         name: "path",
-        sources: { "@src": "./src" },
+        sources: { "@src": "./dist/lattice" },
       },
       target: {
         name: "roblox",
+        rojo_sourcemap: "./sourcemap.json",
       },
     },
   ],
-  // ponytail: no rojo_sourcemap, upgrade: add one if a Rojo project is
-  // introduced and folder structure diverges from the DataModel
+  // Requires rojo_sourcemap because default.project.json maps dist/lattice's
+  // contents directly onto ReplicatedStorage.Lattice (no extra "src" nesting).
+  // Without a sourcemap, darklua guesses the DataModel shape mirrors the
+  // literal "@src" -> "./..." alias path verbatim, which produced broken
+  // `script.Parent:FindFirstChild('src')...` chains (there's no "src" child
+  // of Lattice's parent) - see scripts/BuildPackage.luau for how the
+  // sourcemap gets generated before this config is used.
 }

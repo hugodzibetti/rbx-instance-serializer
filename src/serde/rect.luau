@@ -2,7 +2,7 @@
 --!native
 --!optimize 2
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 local types = require("@src/types")
 
 export type Rect = typeof(roblox.Rect.new(0, 0, 0, 0))

@@ -8,7 +8,7 @@
 -- common. We do the same: 1 flag byte + 1 index byte + position for the
 -- common case, vs. 1 flag byte + 9 matrix floats + position otherwise.
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 local Types = require("@src/types")
 local Writer = require("@src/buffer/Writer")
 local Reader = require("@src/buffer/Reader")

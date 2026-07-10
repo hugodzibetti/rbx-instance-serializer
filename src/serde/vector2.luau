@@ -5,7 +5,7 @@
 local Types = require("@src/types")
 local Writer = require("@src/buffer/Writer")
 local Reader = require("@src/buffer/Reader")
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 
 local Vector2 = roblox.Vector2
 

@@ -2,7 +2,7 @@
 --!native
 --!optimize 2
 
-local roblox = require("@lune/roblox")
+local roblox = require("@src/robloxDatatypes")
 local task = require("@lune/task")
 local RobloxBackend = require("@src/parallel/RobloxBackend")
 local Types = require("@src/types")
